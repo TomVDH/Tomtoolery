@@ -7,7 +7,7 @@
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
-    background: #0a0a1a;
+    background: #060610;
     display: flex; justify-content: center; align-items: center;
     height: 100vh; overflow: hidden;
     font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
@@ -18,139 +18,179 @@
     width: 620px; height: 640px;
     border: 2px solid #1a1a3a;
     border-radius: 14px;
-    box-shadow: 0 0 60px #00d4ff10, 0 8px 32px #00000080, inset 0 0 30px #00000040;
+    box-shadow: 0 0 80px #00d4ff08, 0 8px 40px #00000090;
     overflow: hidden;
   }
-  canvas {
-    display: block; width: 100%; height: 100%;
-  }
-  .overlay {
+  canvas { display: block; width: 100%; height: 100%; }
+
+  /* --- Overlays --- */
+  .screen {
     position: absolute; inset: 0;
     display: flex; flex-direction: column; justify-content: center; align-items: center;
-    pointer-events: none; border-radius: 12px; transition: opacity 0.3s;
+    pointer-events: none; transition: opacity 0.4s ease;
+    opacity: 0; visibility: hidden;
   }
-  .overlay.hidden { opacity: 0; }
+  .screen.show { opacity: 1; visibility: visible; }
+
+  /* Menu */
   .tagline {
     font-family: 'Courier New', monospace;
-    font-size: 14px; letter-spacing: 6px; color: #445;
-    margin-bottom: 10px; text-transform: uppercase;
+    font-size: 13px; letter-spacing: 8px; color: #334;
+    margin-bottom: 12px; text-transform: uppercase;
   }
   .title {
-    font-size: 36px; font-weight: 700; letter-spacing: 3px;
-    color: #fff; margin-bottom: 6px;
-    text-shadow: 0 0 20px #00d4ff44;
+    font-size: 38px; font-weight: 700; letter-spacing: 4px;
+    color: #fff;
+    text-shadow: 0 0 30px #00d4ff22, 0 2px 4px #00000044;
   }
   .subtitle {
-    font-size: 13px; color: #667; letter-spacing: 1px; text-transform: uppercase;
+    font-size: 12px; color: #445; letter-spacing: 2px;
+    text-transform: uppercase; margin-top: 4px;
   }
   .prompt {
-    margin-top: 32px; font-size: 14px; color: #556;
-    animation: pulse 2s ease-in-out infinite;
+    margin-top: 40px; font-size: 13px; color: #445; letter-spacing: 1px;
+    animation: pulse 2.5s ease-in-out infinite;
   }
-  @keyframes pulse { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }
-  .death-score { font-size: 64px; font-weight: 700; color: #fff; line-height: 1; }
-  .death-label { font-size: 13px; color: #556; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px; }
-  .death-best { font-size: 14px; color: #445; margin-top: 8px; }
-  .death-prompt { font-size: 14px; color: #556; margin-top: 28px; animation: pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+
+  /* HUD */
   .hud {
     position: absolute; top: 20px; left: 0; right: 0;
     text-align: center; pointer-events: none;
-    font-size: 36px; font-weight: 700; color: #fff;
-    text-shadow: 0 2px 8px #00000066;
+    font-size: 40px; font-weight: 700; color: #fff;
+    text-shadow: 0 2px 12px #00000066;
     opacity: 0; transition: opacity 0.3s;
+    font-variant-numeric: tabular-nums;
   }
-  .hud.visible { opacity: 1; }
+  .hud.show { opacity: 1; }
+
+  /* YOU DIED */
+  .died-text {
+    font-size: 52px; font-weight: 700; letter-spacing: 12px;
+    color: #cc2200;
+    text-shadow: 0 0 40px #cc220066, 0 0 80px #cc220033;
+    text-transform: uppercase;
+  }
+
+  /* Score screen */
+  .score-value { font-size: 72px; font-weight: 700; color: #fff; line-height: 1; }
+  .score-label {
+    font-size: 12px; color: #445; letter-spacing: 3px;
+    text-transform: uppercase; margin-bottom: 8px;
+  }
+  .score-best { font-size: 13px; color: #334; margin-top: 10px; }
+  .score-prompt {
+    font-size: 13px; color: #445; margin-top: 32px; letter-spacing: 1px;
+    animation: pulse 2.5s ease-in-out infinite;
+  }
 </style>
 </head>
 <body>
 <div id="wrap">
   <canvas id="game" width="620" height="640"></canvas>
   <div class="hud" id="hud">0</div>
-  <div class="overlay" id="menuScreen">
+
+  <div class="screen show" id="menuScreen">
     <div class="tagline">-- ZENATECH --</div>
     <div class="title">FLAPPY DRONE</div>
     <div class="subtitle">Navigate the skyline</div>
     <div class="prompt">Tap or press Space</div>
   </div>
-  <div class="overlay hidden" id="deathScreen">
-    <div class="death-label">Score</div>
-    <div class="death-score" id="deathScore">0</div>
-    <div class="death-best" id="deathBest">Best: 0</div>
-    <div class="death-prompt">Tap to retry</div>
+
+  <div class="screen" id="diedScreen">
+    <div class="died-text">YOU DIED</div>
+  </div>
+
+  <div class="screen" id="scoreScreen">
+    <div class="score-label">Score</div>
+    <div class="score-value" id="scoreValue">0</div>
+    <div class="score-best" id="scoreBest">Best: 0</div>
+    <div class="score-prompt">Tap to retry</div>
   </div>
 </div>
 
 <script>
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
-const hud = document.getElementById('hud');
+const hudEl = document.getElementById('hud');
 const menuScreen = document.getElementById('menuScreen');
-const deathScreen = document.getElementById('deathScreen');
-const deathScoreEl = document.getElementById('deathScore');
-const deathBestEl = document.getElementById('deathBest');
+const diedScreen = document.getElementById('diedScreen');
+const scoreScreen = document.getElementById('scoreScreen');
+const scoreValueEl = document.getElementById('scoreValue');
+const scoreBestEl = document.getElementById('scoreBest');
 
 const W = 620, H = 640;
 
-// --- Game config ---
+// --- Config ---
 const GRAVITY = 0.22;
 const FLAP_FORCE = -5.2;
 const PIPE_SPEED = 1.6;
-const PIPE_INTERVAL = 160; // frames between pipes (wider spacing)
+const PIPE_INTERVAL = 160;
 const GAP_SIZE = 170;
 const PIPE_WIDTH = 56;
 const GROUND_H = 24;
+const CEILING_Y = 10; // drone clamps here, no kill
 
 // --- State ---
+// States: menu, play, dying (you died), dead (score screen)
 let state = 'menu';
 let score = 0, best = 0;
-let drone, pipes, particles, stars;
+let drone, pipes, particles;
 let frame = 0;
 let deathTimer = 0;
 let screenShake = 0;
+let flashAlpha = 0;
 
-// --- Stars (static background) ---
-const bgStars = Array.from({ length: 50 }, () => ({
-  x: Math.random() * W, y: Math.random() * (H * 0.65),
-  r: Math.random() * 1.2 + 0.4, phase: Math.random() * Math.PI * 2
+// --- Background elements (generated once) ---
+const bgStars = Array.from({ length: 55 }, () => ({
+  x: Math.random() * W,
+  y: Math.random() * (H * 0.6),
+  r: Math.random() * 1.1 + 0.3,
+  phase: Math.random() * Math.PI * 2
 }));
 
-// --- Distant buildings (parallax) ---
-const farBuildings = Array.from({ length: 22 }, (_, i) => ({
-  x: i * 34 - 10,
-  h: 25 + Math.random() * 40,
-  w: 22 + Math.random() * 10
+const farBuildings = Array.from({ length: 24 }, (_, i) => ({
+  x: i * 32 - 10,
+  h: 20 + Math.random() * 45,
+  w: 20 + Math.random() * 12
 }));
 
+// --- Init ---
 function init() {
-  drone = { x: 90, y: H / 2, vy: 0, targetAngle: 0, angle: 0, propPhase: 0 };
+  drone = { x: 100, y: H / 2, vy: 0, angle: 0, propPhase: 0 };
   pipes = [];
   particles = [];
   score = 0;
   frame = 0;
   deathTimer = 0;
   screenShake = 0;
-  hud.textContent = '0';
+  flashAlpha = 0;
+  hudEl.textContent = '0';
 }
 
-// --- Input ---
-let canFlap = true;
+// --- Screen helpers ---
+function showScreen(el) { el.classList.add('show'); }
+function hideScreen(el) { el.classList.remove('show'); }
 
+// --- Input ---
 function flap() {
   if (state === 'menu') {
     state = 'play';
-    menuScreen.classList.add('hidden');
-    hud.classList.add('visible');
+    hideScreen(menuScreen);
+    hudEl.classList.add('show');
     init();
+    return;
   }
-  if (state === 'play' && canFlap) {
+  if (state === 'play') {
     drone.vy = FLAP_FORCE;
-    spawnThrustParticles();
+    spawnThrust();
+    return;
   }
-  if (state === 'dead' && deathTimer > 40) {
+  if (state === 'dead' && deathTimer > 30) {
     state = 'menu';
-    deathScreen.classList.add('hidden');
-    menuScreen.classList.remove('hidden');
-    hud.classList.remove('visible');
+    hideScreen(scoreScreen);
+    showScreen(menuScreen);
+    hudEl.classList.remove('show');
     init();
   }
 }
@@ -162,29 +202,29 @@ canvas.addEventListener('click', flap);
 canvas.addEventListener('touchstart', e => { e.preventDefault(); flap(); }, { passive: false });
 
 // --- Particles ---
-function spawnThrustParticles() {
-  for (let i = 0; i < 4; i++) {
+function spawnThrust() {
+  for (let i = 0; i < 3; i++) {
     particles.push({
       x: drone.x, y: drone.y + 10,
-      vx: (Math.random() - 0.5) * 1.2,
-      vy: Math.random() * 2 + 0.8,
-      life: 18, maxLife: 18,
-      r: Math.random() * 2 + 1,
-      color: `hsl(${195 + Math.random() * 15}, 100%, ${60 + Math.random() * 20}%)`
+      vx: (Math.random() - 0.5) * 1, vy: Math.random() * 2 + 0.5,
+      life: 16, maxLife: 16,
+      r: Math.random() * 1.8 + 0.8,
+      hue: 195 + Math.random() * 15
     });
   }
 }
 
 function spawnExplosion(x, y) {
-  for (let i = 0; i < 24; i++) {
-    const a = (Math.PI * 2 / 24) * i + Math.random() * 0.3;
-    const spd = Math.random() * 3.5 + 0.5;
+  const hues = [15, 35, 195, 5];
+  for (let i = 0; i < 20; i++) {
+    const a = (Math.PI * 2 / 20) * i + Math.random() * 0.4;
+    const spd = Math.random() * 3 + 0.5;
     particles.push({
       x, y,
       vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
-      life: 25 + Math.random() * 15, maxLife: 40,
+      life: 22 + Math.random() * 18, maxLife: 40,
       r: Math.random() * 2.5 + 1,
-      color: `hsl(${[20, 40, 195, 350][Math.random() * 4 | 0]}, 90%, ${55 + Math.random() * 20}%)`
+      hue: hues[i % 4]
     });
   }
 }
@@ -192,18 +232,46 @@ function spawnExplosion(x, y) {
 // --- Drawing ---
 function drawSky() {
   const g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, '#060614');
-  g.addColorStop(0.6, '#0c0c28');
-  g.addColorStop(1, '#141432');
+  g.addColorStop(0, '#050510');
+  g.addColorStop(0.5, '#0a0a22');
+  g.addColorStop(1, '#101030');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
 }
 
+function drawMoon() {
+  const mx = W - 90, my = 75, r = 28;
+  // Outer glow
+  const glow = ctx.createRadialGradient(mx, my, r * 0.8, mx, my, r * 3);
+  glow.addColorStop(0, 'rgba(200, 210, 240, 0.06)');
+  glow.addColorStop(1, 'rgba(200, 210, 240, 0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(mx - r * 3, my - r * 3, r * 6, r * 6);
+
+  // Crescent: draw full circle, then cut with offset circle
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(mx, my, r, 0, Math.PI * 2);
+  ctx.fillStyle = '#c8cde8';
+  ctx.globalAlpha = 0.9;
+  ctx.fill();
+
+  // Shadow circle to create crescent
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.beginPath();
+  ctx.arc(mx + 14, my - 6, r * 0.88, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+}
+
 function drawStars() {
   bgStars.forEach(s => {
-    const alpha = (Math.sin(s.phase + frame * 0.015) + 1) / 2 * 0.6 + 0.2;
-    ctx.globalAlpha = alpha;
-    ctx.fillStyle = '#c8d0e0';
+    const a = (Math.sin(s.phase + frame * 0.012) + 1) / 2 * 0.55 + 0.15;
+    ctx.globalAlpha = a;
+    ctx.fillStyle = '#b0b8d0';
     ctx.beginPath();
     ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
     ctx.fill();
@@ -212,23 +280,20 @@ function drawStars() {
 }
 
 function drawFarCity() {
-  const scrollX = (frame * 0.15) % 34;
-  ctx.fillStyle = '#0e0e24';
+  const scrollX = (frame * 0.12) % 32;
+  ctx.fillStyle = '#0c0c20';
   farBuildings.forEach(b => {
-    const bx = ((b.x - scrollX) % (22 * 34) + 22 * 34) % (22 * 34) - 34;
+    const bx = ((b.x - scrollX) % (24 * 32) + 24 * 32) % (24 * 32) - 32;
     ctx.fillRect(bx, H - GROUND_H - b.h, b.w, b.h);
   });
 }
 
 function drawGround() {
-  // Road
-  ctx.fillStyle = '#0f0f1e';
+  ctx.fillStyle = '#0c0c1a';
   ctx.fillRect(0, H - GROUND_H, W, GROUND_H);
-  // Curb
-  ctx.fillStyle = '#1a1a30';
+  ctx.fillStyle = '#181830';
   ctx.fillRect(0, H - GROUND_H, W, 2);
-  // Lane markings
-  ctx.fillStyle = '#222240';
+  ctx.fillStyle = '#1a1a35';
   const off = (frame * PIPE_SPEED) % 24;
   for (let x = -off; x < W; x += 24) {
     ctx.fillRect(x, H - GROUND_H / 2, 12, 2);
@@ -236,44 +301,35 @@ function drawGround() {
 }
 
 function drawBuilding(x, w, topY, height, fromTop) {
-  // Stable color per pipe pair based on spawn position
   const seed = Math.round(x + w * 100) | 0;
-  const hue = 230 + (seed % 30);
-  const light = 12 + (seed % 5);
+  const hue = 228 + (seed % 25);
+  const lit = 11 + (seed % 5);
 
-  // Main body
-  ctx.fillStyle = `hsl(${hue}, 25%, ${light}%)`;
+  ctx.fillStyle = `hsl(${hue}, 25%, ${lit}%)`;
   ctx.fillRect(x, topY, w, height);
 
-  // Left edge highlight
-  ctx.fillStyle = `hsl(${hue}, 20%, ${light + 5}%)`;
+  ctx.fillStyle = `hsl(${hue}, 18%, ${lit + 4}%)`;
   ctx.fillRect(x, topY, 2, height);
-
-  // Right edge shadow
-  ctx.fillStyle = `hsl(${hue}, 30%, ${light - 3}%)`;
+  ctx.fillStyle = `hsl(${hue}, 30%, ${lit - 2}%)`;
   ctx.fillRect(x + w - 2, topY, 2, height);
 
-  // Cap / ledge
   const capY = fromTop ? topY + height - 5 : topY;
-  ctx.fillStyle = `hsl(${hue}, 15%, ${light + 8}%)`;
+  ctx.fillStyle = `hsl(${hue}, 12%, ${lit + 7}%)`;
   ctx.fillRect(x - 4, capY, w + 8, 5);
-  ctx.fillStyle = `hsl(${hue}, 15%, ${light + 12}%)`;
+  ctx.fillStyle = `hsl(${hue}, 12%, ${lit + 10}%)`;
   ctx.fillRect(x - 4, capY, w + 8, 1);
 
   // Windows
-  const winCols = 3;
-  const winW = 5, winH = 7;
-  const margin = (w - winCols * winW) / (winCols + 1);
-  const rowH = 16;
+  const winW = 5, winH = 7, cols = 3;
+  const margin = (w - cols * winW) / (cols + 1);
   const startY = fromTop ? topY + 10 : capY + 10;
   const endY = fromTop ? topY + height - 14 : topY + height - 6;
 
-  for (let row = startY; row < endY; row += rowH) {
-    for (let col = 0; col < winCols; col++) {
-      const wx = x + margin + col * (winW + margin);
-      // Deterministic lit pattern
-      const lit = ((seed * 7 + col * 13 + Math.floor(row) * 3) % 5) > 1;
-      ctx.fillStyle = lit ? 'rgba(255, 200, 60, 0.7)' : 'rgba(255, 200, 60, 0.1)';
+  for (let row = startY; row < endY; row += 16) {
+    for (let c = 0; c < cols; c++) {
+      const wx = x + margin + c * (winW + margin);
+      const on = ((seed * 7 + c * 13 + Math.floor(row) * 3) % 5) > 1;
+      ctx.fillStyle = on ? 'rgba(255, 200, 60, 0.65)' : 'rgba(255, 200, 60, 0.08)';
       ctx.fillRect(wx, row, winW, winH);
     }
   }
@@ -284,41 +340,33 @@ function drawDrone(x, y, angle, propPhase) {
   ctx.translate(x, y);
   ctx.rotate(angle);
 
-  // Shadow underneath
-  ctx.fillStyle = 'rgba(0,0,0,0.15)';
-  ctx.fillRect(-10, 12, 20, 3);
+  ctx.fillStyle = 'rgba(0,0,0,0.12)';
+  ctx.fillRect(-10, 13, 20, 3);
 
-  // Body frame
   ctx.fillStyle = '#3a3a4a';
   ctx.fillRect(-14, -3, 28, 7);
   ctx.fillStyle = '#4a4a5a';
   ctx.fillRect(-12, -2, 24, 5);
 
-  // Center hub
   ctx.fillStyle = '#00c8f0';
   ctx.fillRect(-4, -5, 8, 11);
   ctx.fillStyle = '#009abb';
   ctx.fillRect(-3, -4, 6, 9);
 
-  // Status LED
-  const ledOn = frame % 40 < 20;
-  ctx.fillStyle = ledOn ? '#ff2255' : '#661133';
+  ctx.fillStyle = frame % 40 < 20 ? '#ff2255' : '#551122';
   ctx.fillRect(-1, -7, 2, 2);
 
-  // Arms
   ctx.fillStyle = '#505060';
   ctx.fillRect(-18, -1, 7, 3);
   ctx.fillRect(11, -1, 7, 3);
 
-  // Propeller blur
   const spin = Math.abs(Math.sin(propPhase));
-  ctx.globalAlpha = 0.6;
-  ctx.fillStyle = '#aab';
+  ctx.globalAlpha = 0.55;
+  ctx.fillStyle = '#99a';
   ctx.fillRect(-18 - spin * 6, -4, spin * 12, 2);
   ctx.fillRect(14 - spin * 6, -4, spin * 12, 2);
   ctx.globalAlpha = 1;
 
-  // Landing skids
   ctx.fillStyle = '#555565';
   ctx.fillRect(-10, 5, 2, 4);
   ctx.fillRect(8, 5, 2, 4);
@@ -330,41 +378,80 @@ function drawDrone(x, y, angle, propPhase) {
 
 function drawParticles() {
   particles.forEach(p => {
-    const alpha = (p.life / p.maxLife) * 0.8;
-    ctx.globalAlpha = alpha;
-    ctx.fillStyle = p.color;
+    const t = p.life / p.maxLife;
+    ctx.globalAlpha = t * 0.75;
+    ctx.fillStyle = `hsl(${p.hue}, 90%, ${55 + (1 - t) * 20}%)`;
     ctx.beginPath();
-    ctx.arc(p.x, p.y, p.r * (p.life / p.maxLife), 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, p.r * t, 0, Math.PI * 2);
     ctx.fill();
   });
   ctx.globalAlpha = 1;
 }
 
+function drawVignette() {
+  // Subtle edge darkening
+  const g = ctx.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.75);
+  g.addColorStop(0, 'rgba(0,0,0,0)');
+  g.addColorStop(1, 'rgba(0,0,0,0.35)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+}
+
+function drawFlash() {
+  if (flashAlpha > 0.01) {
+    ctx.globalAlpha = flashAlpha;
+    ctx.fillStyle = '#ff2200';
+    ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = 1;
+  }
+}
+
 // --- Update ---
 function update() {
-  if (state === 'dead') {
+  // Dying state: "YOU DIED" is showing, wait then transition to score
+  if (state === 'dying') {
     deathTimer++;
-    // Continue particle physics
-    particles.forEach(p => {
-      p.x += p.vx; p.y += p.vy;
-      p.vx *= 0.97; p.vy *= 0.97;
-      p.life--;
-    });
-    particles = particles.filter(p => p.life > 0);
-    if (screenShake > 0) screenShake *= 0.85;
+    flashAlpha *= 0.92;
+    if (screenShake > 0.3) screenShake *= 0.82;
+    // Particle physics continues
+    updateParticles();
+    // After 90 frames (~1.5s), move to score screen
+    if (deathTimer > 90) {
+      state = 'dead';
+      deathTimer = 0;
+      hideScreen(diedScreen);
+      scoreValueEl.textContent = score;
+      scoreBestEl.textContent = `Best: ${best}`;
+      showScreen(scoreScreen);
+    }
     return;
   }
+
+  // Dead state: score screen showing, wait for input
+  if (state === 'dead') {
+    deathTimer++;
+    updateParticles();
+    return;
+  }
+
   if (state !== 'play') return;
 
   frame++;
 
   // Drone physics
   drone.vy += GRAVITY;
-  drone.vy = Math.min(drone.vy, 8); // terminal velocity
+  drone.vy = Math.min(drone.vy, 8);
   drone.y += drone.vy;
-  drone.targetAngle = drone.vy * 0.055;
-  drone.targetAngle = Math.max(-0.4, Math.min(0.5, drone.targetAngle));
-  drone.angle += (drone.targetAngle - drone.angle) * 0.15; // smooth rotation
+
+  // Ceiling clamp (no kill)
+  if (drone.y < CEILING_Y) {
+    drone.y = CEILING_Y;
+    drone.vy = Math.max(drone.vy, 0); // stop upward momentum
+  }
+
+  // Smooth angle
+  const targetAngle = Math.max(-0.4, Math.min(0.5, drone.vy * 0.055));
+  drone.angle += (targetAngle - drone.angle) * 0.12;
   drone.propPhase += 0.5;
 
   // Spawn pipes
@@ -372,14 +459,12 @@ function update() {
     const minTop = 70;
     const maxTop = H - GAP_SIZE - GROUND_H - 70;
     const topH = minTop + Math.random() * (maxTop - minTop);
-    const id = frame; // unique id for color stability
     pipes.push(
-      { x: W + 10, w: PIPE_WIDTH, y: 0, h: topH, fromTop: true, scored: false, id },
-      { x: W + 10, w: PIPE_WIDTH, y: topH + GAP_SIZE, h: H - GROUND_H - topH - GAP_SIZE, fromTop: false, id }
+      { x: W + 10, w: PIPE_WIDTH, y: 0, h: topH, fromTop: true, scored: false },
+      { x: W + 10, w: PIPE_WIDTH, y: topH + GAP_SIZE, h: H - GROUND_H - topH - GAP_SIZE, fromTop: false }
     );
   }
 
-  // Move pipes
   pipes.forEach(p => p.x -= PIPE_SPEED);
   pipes = pipes.filter(p => p.x + p.w > -20);
 
@@ -388,81 +473,83 @@ function update() {
     if (pipes[i] && !pipes[i].scored && pipes[i].x + pipes[i].w < drone.x - 12) {
       pipes[i].scored = true;
       score++;
-      hud.textContent = score;
+      hudEl.textContent = score;
     }
   }
 
-  // Collision (use inner body hitbox, forgiving)
+  // Collision
   const hb = { x: drone.x - 10, y: drone.y - 4, w: 20, h: 12 };
   for (const p of pipes) {
-    const px = p.x - 2, pw = p.w + 4; // slight cap overhang
+    const px = p.x - 2, pw = p.w + 4;
     if (hb.x + hb.w > px && hb.x < px + pw &&
         hb.y + hb.h > p.y && hb.y < p.y + p.h) {
       die(); return;
     }
   }
 
-  // Ceiling / ground
+  // Ground kill
   if (drone.y > H - GROUND_H - 8) { drone.y = H - GROUND_H - 8; die(); return; }
-  if (drone.y < -30) { drone.y = -30; die(); return; }
 
-  // Particle update
+  updateParticles();
+}
+
+function updateParticles() {
   particles.forEach(p => {
     p.x += p.vx; p.y += p.vy;
-    p.vy += 0.03;
+    p.vx *= 0.98; p.vy *= 0.98;
+    p.vy += 0.02;
     p.life--;
   });
   particles = particles.filter(p => p.life > 0);
 }
 
 function die() {
-  state = 'dead';
+  state = 'dying';
   best = Math.max(best, score);
-  screenShake = 6;
+  deathTimer = 0;
+  screenShake = 8;
+  flashAlpha = 0.5;
   spawnExplosion(drone.x, drone.y);
-
-  // Show death screen after short delay
+  hudEl.classList.remove('show');
+  // Short delay then show "YOU DIED"
   setTimeout(() => {
-    deathScoreEl.textContent = score;
-    deathBestEl.textContent = `Best: ${best}`;
-    deathScreen.classList.remove('hidden');
-    hud.classList.remove('visible');
-  }, 500);
+    if (state === 'dying') showScreen(diedScreen);
+  }, 300);
 }
 
-// --- Render loop ---
+// --- Render ---
 function render() {
-  // Screen shake offset
-  const sx = state === 'dead' && screenShake > 0.5 ? (Math.random() - 0.5) * screenShake : 0;
-  const sy = state === 'dead' && screenShake > 0.5 ? (Math.random() - 0.5) * screenShake : 0;
+  const shaking = (state === 'dying') && screenShake > 0.3;
+  const sx = shaking ? (Math.random() - 0.5) * screenShake : 0;
+  const sy = shaking ? (Math.random() - 0.5) * screenShake : 0;
 
   ctx.save();
   ctx.translate(sx, sy);
 
   drawSky();
+  drawMoon();
   drawStars();
   drawFarCity();
   drawGround();
 
-  // Buildings
   pipes.forEach(p => drawBuilding(p.x, p.w, p.y, p.h, p.fromTop));
-
-  // Particles behind drone
   drawParticles();
 
-  // Drone (hide after explosion fades)
-  if (state !== 'dead') {
+  if (state === 'play') {
     drawDrone(drone.x, drone.y, drone.angle, drone.propPhase);
   }
 
+  drawVignette();
+  drawFlash();
+
   ctx.restore();
 
-  // Menu idle drone
+  // Menu idle drone (drawn outside shake context)
   if (state === 'menu') {
     frame++;
     drone.propPhase += 0.5;
-    drone.y = H / 2 + Math.sin(frame * 0.03) * 12;
-    drone.angle = Math.sin(frame * 0.02) * 0.05;
+    drone.y = H / 2 + Math.sin(frame * 0.025) * 14;
+    drone.angle = Math.sin(frame * 0.018) * 0.04;
     drawDrone(drone.x, drone.y, drone.angle, drone.propPhase);
   }
 
