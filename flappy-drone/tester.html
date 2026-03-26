@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flappy Drone - Effect Tester</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #060610; color: #ccc;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    display: flex; gap: 24px; padding: 24px;
+    min-height: 100vh;
+  }
+  #panel {
+    width: 220px; flex-shrink: 0;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  h2 { font-size: 14px; color: #556; letter-spacing: 2px; text-transform: uppercase; margin: 12px 0 4px; }
+  h2:first-child { margin-top: 0; }
+  .tag { font-size: 10px; color: #334; letter-spacing: 1px; text-transform: uppercase; }
+  button {
+    background: #151528; border: 1px solid #252540; color: #aab;
+    padding: 10px 14px; border-radius: 6px; cursor: pointer;
+    font-size: 13px; text-align: left; transition: all 0.15s;
+  }
+  button:hover { background: #1e1e38; border-color: #3a3a5a; color: #dde; }
+  button:active { background: #252548; }
+  .btn-death { border-color: #442222; }
+  .btn-death:hover { border-color: #663333; color: #ff8888; }
+  .btn-fx { border-color: #223344; }
+  .btn-fx:hover { border-color: #335566; color: #88ccff; }
+  .btn-sign { border-color: #224422; }
+  .btn-sign:hover { border-color: #336633; color: #88ff88; }
+  .btn-future { border-color: #333322; opacity: 0.5; }
+  .btn-future:hover { opacity: 0.7; }
+  canvas {
+    flex: 1; max-width: 620px; max-height: 640px;
+    border: 2px solid #1a1a3a; border-radius: 14px;
+    box-shadow: 0 0 80px #00d4ff08, 0 8px 40px #00000090;
+  }
+  .title-bar {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 16px;
+  }
+  .title-bar h1 {
+    font-size: 18px; font-weight: 700; color: #fff; letter-spacing: 1px;
+  }
+  .title-bar .badge {
+    font-size: 10px; background: #ff440033; color: #ff8844;
+    padding: 2px 8px; border-radius: 10px; letter-spacing: 1px;
+  }
+</style>
+</head>
+<body>
+<div id="panel">
+  <div class="title-bar">
+    <h1>TESTER</h1>
+    <span class="badge">DEV</span>
+  </div>
+
+  <h2>Death Sequence</h2>
+  <button class="btn-death" onclick="triggerDeath()">Death - Full Sequence</button>
+  <button class="btn-death" onclick="triggerFlash()">Red Flash Only</button>
+  <button class="btn-death" onclick="triggerYouDied()">YOU DIED Text Only</button>
+
+  <h2>Particles</h2>
+  <button class="btn-fx" onclick="triggerExplosion()">Explosion</button>
+  <button class="btn-fx" onclick="triggerThrust()">Thrust Burst</button>
+
+  <h2>Neon Signs</h2>
+  <button class="btn-sign" onclick="spawnSignBuilding('ZENATECH', '#00d4ff')">ZENATECH (rooftop)</button>
+  <button class="btn-sign" onclick="spawnSignBuilding('IQ NANO', '#ff4488')">IQ NANO</button>
+  <button class="btn-sign" onclick="spawnSignBuilding('ZD1000', '#44ffaa')">ZD1000</button>
+  <button class="btn-sign" onclick="spawnSignBuilding('PP-1', '#ffaa22')">PP-1</button>
+  <button class="btn-sign" onclick="spawnSignBuilding('IQ SQUARE', '#aa66ff')">IQ SQUARE</button>
+  <button class="btn-sign" onclick="spawnSignBuilding('ZenaGames', '#44ddff')">ZenaGames</button>
+
+  <h2>Upcoming</h2>
+  <button class="btn-future" onclick="triggerFirework()">Fireworks</button>
+  <button class="btn-future" onclick="triggerCountdown()">Start Countdown</button>
+
+  <h2>Scene</h2>
+  <button class="btn-fx" id="motionBtn" onclick="toggleMotion()">Motion: ON</button>
+  <button class="btn-fx" onclick="resetScene()">Reset Scene</button>
+</div>
+
+<canvas id="game" width="620" height="640"></canvas>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const W = 620, H = 640;
+const GROUND_H = 24;
+
+let globalTick = 0;
+let motionEnabled = true;
+let particles = [];
+let testBuildings = [];  // { x, w, topY, height, fromTop, signText, signColor, signType }
+let flashAlpha = 0;
+let youDiedAlpha = 0;
+let youDiedState = 'off'; // off, fadein, hold, fadeout
+let youDiedTimer = 0;
+let screenShake = 0;
+
+// --- Background (same as game) ---
+const bgStars = Array.from({ length: 55 }, () => ({
+  x: Math.random() * W, y: Math.random() * (H * 0.6),
+  r: Math.random() * 1.1 + 0.3, phase: Math.random() * Math.PI * 2
+}));
+
+const FAR_TILE_W = 320;
+const farBuildings = Array.from({ length: 10 }, (_, i) => ({
+  x: i * 32,
+  h: 20 + Math.sin(i * 2.7 + 1.3) * 18 + Math.cos(i * 4.1) * 12 + 15,
+  w: 20 + ((i * 7 + 3) % 5) * 2
+}));
+
+// Drone state
+const drone = { x: W / 2, y: H / 2 - 40, vy: 0, angle: 0, propPhase: 0 };
+
+// --- Pixel font ---
+const PX = {
+  A:[0b01110,0b10001,0b11111,0b10001,0b10001],
+  C:[0b01111,0b10000,0b10000,0b10000,0b01111],
+  D:[0b11110,0b10001,0b10001,0b10001,0b11110],
+  E:[0b11111,0b10000,0b11110,0b10000,0b11111],
+  G:[0b01111,0b10000,0b10011,0b10001,0b01111],
+  H:[0b10001,0b10001,0b11111,0b10001,0b10001],
+  I:[0b11111,0b00100,0b00100,0b00100,0b11111],
+  N:[0b10001,0b11001,0b10101,0b10011,0b10001],
+  O:[0b01110,0b10001,0b10001,0b10001,0b01110],
+  P:[0b11110,0b10001,0b11110,0b10000,0b10000],
+  Q:[0b01110,0b10001,0b10101,0b10010,0b01101],
+  R:[0b11110,0b10001,0b11110,0b10010,0b10001],
+  S:[0b01111,0b10000,0b01110,0b00001,0b11110],
+  T:[0b11111,0b00100,0b00100,0b00100,0b00100],
+  U:[0b10001,0b10001,0b10001,0b10001,0b01110],
+  Z:[0b11111,0b00010,0b00100,0b01000,0b11111],
+  a:[0b00000,0b01110,0b00001,0b01111,0b01111],
+  e:[0b00000,0b01110,0b11111,0b10000,0b01110],
+  m:[0b00000,0b11010,0b10101,0b10101,0b10001],
+  n:[0b00000,0b10110,0b11001,0b10001,0b10001],
+  s:[0b00000,0b01111,0b01000,0b00110,0b11110],
+  '0':[0b01110,0b10011,0b10101,0b11001,0b01110],
+  '1':[0b00110,0b10100,0b00100,0b00100,0b11111],
+  '-':[0b00000,0b00000,0b11111,0b00000,0b00000],
+  ' ':[0b00000,0b00000,0b00000,0b00000,0b00000],
+};
+
+// --- Drawing functions (mirrored from game) ---
+function drawSky() {
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#050510');
+  g.addColorStop(0.5, '#0a0a22');
+  g.addColorStop(1, '#101030');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+}
+
+function drawMoon() {
+  const mx = W - 90, my = 75, r = 28;
+  const glow = ctx.createRadialGradient(mx, my, r * 0.8, mx, my, r * 3);
+  glow.addColorStop(0, 'rgba(200, 210, 240, 0.06)');
+  glow.addColorStop(1, 'rgba(200, 210, 240, 0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(mx - r * 3, my - r * 3, r * 6, r * 6);
+  ctx.save();
+  ctx.beginPath(); ctx.arc(mx, my, r, 0, Math.PI * 2);
+  ctx.fillStyle = '#c8cde8'; ctx.globalAlpha = 0.9; ctx.fill();
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.beginPath(); ctx.arc(mx + 14, my - 6, r * 0.88, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+}
+
+function drawStars() {
+  bgStars.forEach(s => {
+    ctx.globalAlpha = (Math.sin(s.phase + globalTick * 0.012) + 1) / 2 * 0.55 + 0.15;
+    ctx.fillStyle = '#b0b8d0';
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+}
+
+function drawFarCity() {
+  const scrollX = motionEnabled ? (globalTick * 0.12) % FAR_TILE_W : 0;
+  ctx.fillStyle = '#0c0c20';
+  for (let tileOff = -FAR_TILE_W; tileOff < W + FAR_TILE_W; tileOff += FAR_TILE_W) {
+    farBuildings.forEach(b => {
+      const bx = b.x + tileOff - scrollX;
+      if (bx + b.w > -10 && bx < W + 10) ctx.fillRect(bx, H - GROUND_H - b.h, b.w, b.h);
+    });
+  }
+}
+
+function drawGround() {
+  ctx.fillStyle = '#0c0c1a'; ctx.fillRect(0, H - GROUND_H, W, GROUND_H);
+  ctx.fillStyle = '#181830'; ctx.fillRect(0, H - GROUND_H, W, 2);
+  ctx.fillStyle = '#1a1a35';
+  const off = motionEnabled ? (globalTick * 1.6) % 24 : 0;
+  for (let x = -off; x < W; x += 24) ctx.fillRect(x, H - GROUND_H / 2, 12, 2);
+}
+
+function drawBuilding(b) {
+  const { x, w, topY, height, fromTop } = b;
+  const seed = Math.round(x + w * 100) | 0;
+  const hue = 228 + (seed % 25), lit = 11 + (seed % 5);
+
+  ctx.fillStyle = `hsl(${hue}, 25%, ${lit}%)`; ctx.fillRect(x, topY, w, height);
+  ctx.fillStyle = `hsl(${hue}, 18%, ${lit + 4}%)`; ctx.fillRect(x, topY, 2, height);
+  ctx.fillStyle = `hsl(${hue}, 30%, ${lit - 2}%)`; ctx.fillRect(x + w - 2, topY, 2, height);
+
+  const capY = fromTop ? topY + height - 5 : topY;
+  ctx.fillStyle = `hsl(${hue}, 12%, ${lit + 7}%)`; ctx.fillRect(x - 4, capY, w + 8, 5);
+  ctx.fillStyle = `hsl(${hue}, 12%, ${lit + 10}%)`; ctx.fillRect(x - 4, capY, w + 8, 1);
+
+  const winW = 5, winH = 7, cols = 3, margin = (w - cols * winW) / (cols + 1);
+  const startY = fromTop ? topY + 10 : capY + 10;
+  const endY = fromTop ? topY + height - 14 : topY + height - 6;
+  for (let row = startY; row < endY; row += 16) {
+    for (let c = 0; c < cols; c++) {
+      const wx = x + margin + c * (winW + margin);
+      const on = ((seed * 7 + c * 13 + Math.floor(row) * 3) % 5) > 1;
+      ctx.fillStyle = on ? 'rgba(255, 200, 60, 0.65)' : 'rgba(255, 200, 60, 0.08)';
+      ctx.fillRect(wx, row, winW, winH);
+    }
+  }
+
+  // Neon sign
+  if (b.signText) {
+    const sy = b.signType === 'roof' ? topY - 10 : topY + 20;
+    drawNeonText(b.signText, x, sy, w, b.signColor, seed);
+  }
+}
+
+function drawNeonText(text, bx, sy, bw, color, seed) {
+  const charW = 5, charH = 5, gap = 1, scale = 1.5;
+  const totalW = text.length * (charW + gap) * scale - gap * scale;
+  const sx = bx + (bw - totalW) / 2;
+
+  ctx.globalAlpha = 0.15; ctx.fillStyle = color;
+  ctx.fillRect(sx - 3, sy - 2, totalW + 6, charH * scale + 4);
+
+  const flicker = Math.sin(globalTick * 0.06 + seed * 3.7) > -0.85 ? 1 : 0.25;
+  ctx.globalAlpha = 0.85 * flicker; ctx.fillStyle = color;
+
+  for (let ci = 0; ci < text.length; ci++) {
+    const rows = PX[text[ci]]; if (!rows) continue;
+    const cx = sx + ci * (charW + gap) * scale;
+    for (let r = 0; r < charH; r++)
+      for (let c = 0; c < charW; c++)
+        if ((rows[r] >> (charW - 1 - c)) & 1)
+          ctx.fillRect(cx + c * scale, sy + r * scale, scale, scale);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawDrone() {
+  const { x, y, angle, propPhase } = drone;
+  ctx.save(); ctx.translate(x, y); ctx.rotate(angle);
+  ctx.fillStyle = 'rgba(0,0,0,0.12)'; ctx.fillRect(-10, 13, 20, 3);
+  ctx.fillStyle = '#3a3a4a'; ctx.fillRect(-14, -3, 28, 7);
+  ctx.fillStyle = '#4a4a5a'; ctx.fillRect(-12, -2, 24, 5);
+  ctx.fillStyle = '#00c8f0'; ctx.fillRect(-4, -5, 8, 11);
+  ctx.fillStyle = '#009abb'; ctx.fillRect(-3, -4, 6, 9);
+  ctx.fillStyle = globalTick % 40 < 20 ? '#ff2255' : '#551122'; ctx.fillRect(-1, -7, 2, 2);
+  ctx.fillStyle = '#505060'; ctx.fillRect(-18, -1, 7, 3); ctx.fillRect(11, -1, 7, 3);
+  const spin = Math.abs(Math.sin(propPhase));
+  ctx.globalAlpha = 0.55; ctx.fillStyle = '#99a';
+  ctx.fillRect(-18 - spin * 6, -4, spin * 12, 2);
+  ctx.fillRect(14 - spin * 6, -4, spin * 12, 2); ctx.globalAlpha = 1;
+  ctx.fillStyle = '#555565';
+  ctx.fillRect(-10, 5, 2, 4); ctx.fillRect(8, 5, 2, 4);
+  ctx.fillRect(-12, 8, 8, 2); ctx.fillRect(4, 8, 8, 2);
+  ctx.restore();
+}
+
+function drawParticles() {
+  particles.forEach(p => {
+    const t = p.life / p.maxLife;
+    ctx.globalAlpha = t * 0.75;
+    const sat = p.sat || 90, lum = p.lum || 55;
+    ctx.fillStyle = `hsl(${p.hue}, ${sat}%, ${lum + (1 - t) * 20}%)`;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r * t, 0, Math.PI * 2); ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+}
+
+function drawVignette() {
+  const g = ctx.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.75);
+  g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.35)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+}
+
+function drawFlash() {
+  if (flashAlpha > 0.01) {
+    ctx.globalAlpha = flashAlpha; ctx.fillStyle = '#cc1100';
+    ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1;
+  }
+}
+
+function drawYouDied() {
+  if (youDiedAlpha < 0.01) return;
+
+  // Shadow band
+  const bandH = 80, bandY = H / 2 - bandH / 2;
+  const g = ctx.createLinearGradient(0, bandY - 20, 0, bandY + bandH + 20);
+  g.addColorStop(0, 'rgba(0,0,0,0)');
+  g.addColorStop(0.15, `rgba(0,0,0,${youDiedAlpha * 0.6})`);
+  g.addColorStop(0.5, `rgba(0,0,0,${youDiedAlpha * 0.75})`);
+  g.addColorStop(0.85, `rgba(0,0,0,${youDiedAlpha * 0.6})`);
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, bandY - 20, W, bandH + 40);
+
+  ctx.globalAlpha = youDiedAlpha;
+  ctx.font = '700 48px "Segoe UI", system-ui, sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.shadowColor = '#cc220088'; ctx.shadowBlur = 40;
+  ctx.fillStyle = '#bb2200'; ctx.fillText('YOU DIED', W / 2, H / 2);
+  ctx.shadowBlur = 20; ctx.fillStyle = '#cc2200'; ctx.fillText('YOU DIED', W / 2, H / 2);
+  ctx.shadowBlur = 0; ctx.shadowColor = 'transparent'; ctx.globalAlpha = 1;
+}
+
+// --- Effect triggers ---
+function triggerDeath() {
+  flashAlpha = 0.5;
+  screenShake = 8;
+  spawnExplosionAt(drone.x, drone.y);
+  youDiedState = 'wait';
+  youDiedTimer = 0;
+}
+
+function triggerFlash() {
+  flashAlpha = 0.6;
+  screenShake = 6;
+}
+
+function triggerYouDied() {
+  youDiedState = 'fadein';
+  youDiedTimer = 0;
+  youDiedAlpha = 0;
+}
+
+function triggerExplosion() {
+  spawnExplosionAt(drone.x, drone.y);
+  screenShake = 4;
+}
+
+function triggerThrust() {
+  for (let i = 0; i < 8; i++) {
+    particles.push({
+      x: drone.x, y: drone.y + 10,
+      vx: (Math.random() - 0.5) * 1, vy: Math.random() * 2 + 0.5,
+      life: 16, maxLife: 16, r: Math.random() * 1.8 + 0.8, hue: 195 + Math.random() * 15
+    });
+  }
+}
+
+function spawnSignBuilding(text, color) {
+  const bw = 56;
+  // Place a bottom building in the center area
+  const bx = W / 2 - bw / 2 + (Math.random() - 0.5) * 200;
+  const bh = 120 + Math.random() * 100;
+  const topY = H - GROUND_H - bh;
+  testBuildings.push({
+    x: bx, w: bw, topY, height: bh, fromTop: false,
+    signText: text, signColor: color,
+    signType: text === 'ZENATECH' ? 'roof' : 'side'
+  });
+  // Keep max 6 buildings
+  if (testBuildings.length > 6) testBuildings.shift();
+}
+
+function triggerFirework() {
+  // Placeholder -- will be implemented
+  for (let i = 0; i < 15; i++) {
+    const a = (Math.PI * 2 / 15) * i;
+    particles.push({
+      x: W / 2 + (Math.random() - 0.5) * 200, y: H * 0.3 + Math.random() * 50,
+      vx: Math.cos(a) * 2, vy: Math.sin(a) * 2,
+      life: 30, maxLife: 30, r: 2, hue: Math.random() * 360
+    });
+  }
+}
+
+function triggerCountdown() {
+  // Placeholder
+}
+
+function toggleMotion() {
+  motionEnabled = !motionEnabled;
+  document.getElementById('motionBtn').textContent = 'Motion: ' + (motionEnabled ? 'ON' : 'OFF');
+}
+
+function resetScene() {
+  testBuildings = [];
+  particles = [];
+  flashAlpha = 0;
+  youDiedAlpha = 0;
+  youDiedState = 'off';
+  screenShake = 0;
+}
+
+function spawnExplosionAt(x, y) {
+  const hues = [5, 15, 25, 35, 45, 55];
+  for (let i = 0; i < 36; i++) {
+    const a = (Math.PI * 2 / 36) * i + Math.random() * 0.3;
+    const spd = Math.random() * 5 + 1.5;
+    particles.push({
+      x: x + (Math.random() - 0.5) * 6, y: y + (Math.random() - 0.5) * 6,
+      vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
+      life: 30 + Math.random() * 25, maxLife: 55,
+      r: Math.random() * 4 + 2, hue: hues[i % hues.length], sat: 100, lum: 55
+    });
+  }
+  for (let i = 0; i < 16; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const spd = Math.random() * 2 + 0.3;
+    particles.push({
+      x, y, vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
+      life: 15 + Math.random() * 12, maxLife: 27,
+      r: Math.random() * 2.5 + 1.5, hue: 45 + Math.random() * 15, sat: 100, lum: 75
+    });
+  }
+}
+
+// --- Update ---
+function update() {
+  globalTick++;
+  drone.propPhase += 0.5;
+  drone.y = H / 2 - 40 + Math.sin(globalTick * 0.025) * 14;
+  drone.angle = Math.sin(globalTick * 0.018) * 0.04;
+
+  flashAlpha *= 0.92;
+  if (screenShake > 0.3) screenShake *= 0.85;
+
+  // YOU DIED state machine
+  if (youDiedState === 'wait') {
+    youDiedTimer++;
+    if (youDiedTimer > 18) { youDiedState = 'fadein'; youDiedTimer = 0; }
+  } else if (youDiedState === 'fadein') {
+    youDiedTimer++;
+    youDiedAlpha = Math.pow(youDiedTimer / 120, 2);
+    if (youDiedTimer >= 120) { youDiedState = 'hold'; youDiedTimer = 0; youDiedAlpha = 1; }
+  } else if (youDiedState === 'hold') {
+    youDiedTimer++;
+    if (youDiedTimer >= 70) { youDiedState = 'fadeout'; youDiedTimer = 0; }
+  } else if (youDiedState === 'fadeout') {
+    youDiedTimer++;
+    youDiedAlpha = 1 - youDiedTimer / 60;
+    if (youDiedTimer >= 60) { youDiedState = 'off'; youDiedAlpha = 0; }
+  }
+
+  particles.forEach(p => { p.x += p.vx; p.y += p.vy; p.vx *= 0.98; p.vy *= 0.98; p.vy += 0.02; p.life--; });
+  particles = particles.filter(p => p.life > 0);
+}
+
+// --- Render ---
+function render() {
+  const shaking = screenShake > 0.3;
+  const sx = shaking ? (Math.random() - 0.5) * screenShake : 0;
+  const sy = shaking ? (Math.random() - 0.5) * screenShake : 0;
+
+  ctx.save(); ctx.translate(sx, sy);
+
+  drawSky();
+  drawMoon();
+  drawStars();
+  drawFarCity();
+  drawGround();
+
+  testBuildings.forEach(b => drawBuilding(b));
+  drawParticles();
+  drawDrone();
+  drawVignette();
+  drawFlash();
+  drawYouDied();
+
+  ctx.restore();
+
+  update();
+  requestAnimationFrame(render);
+}
+
+render();
+</script>
+</body>
+</html>

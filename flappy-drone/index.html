@@ -40,9 +40,11 @@
     text-shadow: 0 0 12px #00d4ff11;
   }
   .title {
-    font-size: 38px; font-weight: 700; letter-spacing: 4px;
-    color: #fff;
-    text-shadow: 0 0 30px #00d4ff22, 0 2px 4px #00000044;
+    font-family: 'Courier New', monospace;
+    font-size: 36px; font-weight: 700; letter-spacing: 6px;
+    color: transparent;
+    -webkit-text-stroke: 1.5px #fff;
+    text-shadow: 0 0 30px #00d4ff22;
   }
   .slogan {
     font-size: 12px; color: #556; letter-spacing: 2px;
@@ -91,7 +93,6 @@
     <div class="tagline">-- ZENATECH --</div>
     <div class="title">FLAPPY DRONE</div>
     <div class="slogan">Building the drone as we're flying it</div>
-    <div class="subtitle">Navigate the skyline</div>
     <div class="prompt">Tap or press Space</div>
   </div>
 
@@ -132,12 +133,17 @@ const DIED_FADE_OUT = 60;         // fades out over ~1s
 const DIED_TOTAL = DEATH_FLASH_DUR + DIED_FADE_IN + DIED_HOLD + DIED_FADE_OUT;
 const SCORE_DELAY = 20;           // pause before score screen
 
+// --- Ready countdown ---
+const READY_DURATION = 90; // ~1.5s at 60fps
+
 // --- State ---
+// States: menu, ready, play, dying, dead
 let state = 'menu';
 let score = 0, best = 0;
 let drone, pipes, particles;
 let frame = 0;
 let deathTimer = 0;
+let readyTimer = 0;
 let screenShake = 0;
 let flashAlpha = 0;
 let globalTick = 0;
@@ -177,9 +183,9 @@ function hideScreen(el) { el.classList.remove('show'); }
 // --- Input ---
 function flap() {
   if (state === 'menu') {
-    state = 'play';
+    state = 'ready';
+    readyTimer = 0;
     hideScreen(menuScreen);
-    hudEl.classList.add('show');
     init();
     return;
   }
@@ -218,7 +224,7 @@ function spawnThrust() {
 }
 
 function spawnExplosion(x, y) {
-  const hues = [15, 35, 50, 195, 5, 30];
+  const hues = [5, 15, 25, 35, 45, 55]; // red -> orange -> yellow
   // Outer burst -- big sparkles
   for (let i = 0; i < 36; i++) {
     const a = (Math.PI * 2 / 36) * i + Math.random() * 0.3;
@@ -228,10 +234,10 @@ function spawnExplosion(x, y) {
       vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
       life: 30 + Math.random() * 25, maxLife: 55,
       r: Math.random() * 4 + 2,
-      hue: hues[i % hues.length]
+      hue: hues[i % hues.length], sat: 100, lum: 55
     });
   }
-  // Inner hot core -- small bright sparks
+  // Inner hot core -- bright white-yellow
   for (let i = 0; i < 16; i++) {
     const a = Math.random() * Math.PI * 2;
     const spd = Math.random() * 2 + 0.3;
@@ -239,8 +245,8 @@ function spawnExplosion(x, y) {
       x, y,
       vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
       life: 15 + Math.random() * 12, maxLife: 27,
-      r: Math.random() * 2 + 1,
-      hue: 40 + Math.random() * 20
+      r: Math.random() * 2.5 + 1.5,
+      hue: 45 + Math.random() * 15, sat: 100, lum: 75
     });
   }
 }
@@ -467,7 +473,8 @@ function drawParticles() {
   particles.forEach(p => {
     const t = p.life / p.maxLife;
     ctx.globalAlpha = t * 0.75;
-    ctx.fillStyle = `hsl(${p.hue}, 90%, ${55 + (1 - t) * 20}%)`;
+    const sat = p.sat || 90, lum = p.lum || 55;
+    ctx.fillStyle = `hsl(${p.hue}, ${sat}%, ${lum + (1 - t) * 20}%)`;
     ctx.beginPath();
     ctx.arc(p.x, p.y, p.r * t, 0, Math.PI * 2);
     ctx.fill();
@@ -552,6 +559,71 @@ function drawDeathSequence() {
   }
 }
 
+// --- Ready countdown overlay ---
+function drawReadySequence() {
+  if (state !== 'ready') return;
+
+  const t = readyTimer / READY_DURATION; // 0 -> 1
+
+  // Draw drone with flickering outline
+  drawDrone(drone.x, drone.y, drone.angle, drone.propPhase);
+
+  // Outline blink: starts fast (period=4), eases to slow (period=30), then solid
+  // Ease-out: blink period increases as t approaches 1
+  const blinkPeriod = 4 + t * t * 26; // 4 -> 30 frames
+  const blinkOn = (readyTimer % Math.round(blinkPeriod)) < (blinkPeriod * 0.5);
+
+  if (blinkOn || t > 0.92) {
+    // Draw glowing outline around drone
+    ctx.save();
+    ctx.translate(drone.x, drone.y);
+    ctx.rotate(drone.angle);
+
+    const outlineAlpha = t > 0.92 ? (1 - (t - 0.92) / 0.08) : 0.8; // fade out at end
+    ctx.strokeStyle = '#00d4ff';
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = outlineAlpha;
+    ctx.shadowColor = '#00d4ff';
+    ctx.shadowBlur = 8;
+    ctx.strokeRect(-16, -9, 32, 20);
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = 'transparent';
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  // Text sequence: GET READY -> Navigate the Skyline. -> GO
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  if (t < 0.5) {
+    // GET READY -- quick fade in
+    ctx.globalAlpha = Math.min(1, readyTimer / 10) * 0.7;
+    ctx.font = '700 18px "Segoe UI", system-ui, sans-serif';
+    ctx.fillStyle = '#556';
+    ctx.fillText('GET READY', W / 2, H / 2 - 70);
+  } else if (t < 0.78) {
+    // Navigate the Skyline.
+    const fadeT = Math.min(1, (t - 0.5) / 0.06);
+    ctx.globalAlpha = fadeT * 0.8;
+    ctx.font = 'italic 16px "Segoe UI", system-ui, sans-serif';
+    ctx.fillStyle = '#667';
+    ctx.fillText('Navigate the Skyline.', W / 2, H / 2 - 70);
+  } else {
+    // GO
+    const goT = (t - 0.78) / 0.22;
+    ctx.globalAlpha = goT;
+    ctx.font = '700 28px "Segoe UI", system-ui, sans-serif';
+    ctx.fillStyle = '#00d4ff';
+    ctx.shadowColor = '#00d4ff44';
+    ctx.shadowBlur = 15;
+    ctx.fillText('GO', W / 2, H / 2 - 70);
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = 'transparent';
+  }
+  ctx.globalAlpha = 1;
+}
+
 // --- Update ---
 function update() {
   if (state === 'dying') {
@@ -572,6 +644,18 @@ function update() {
   if (state === 'dead') {
     deathTimer++;
     updateParticles();
+    return;
+  }
+
+  if (state === 'ready') {
+    readyTimer++;
+    drone.propPhase += 0.5;
+    drone.y = H / 2 + Math.sin(globalTick * 0.025) * 8;
+    drone.angle = Math.sin(globalTick * 0.018) * 0.03;
+    if (readyTimer >= READY_DURATION) {
+      state = 'play';
+      hudEl.classList.add('show');
+    }
     return;
   }
 
@@ -672,6 +756,7 @@ function render() {
   }
 
   drawVignette();
+  drawReadySequence();
   drawDeathSequence();
 
   ctx.restore();
