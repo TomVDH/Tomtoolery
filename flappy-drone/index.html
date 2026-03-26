@@ -64,14 +64,6 @@
   }
   .hud.show { opacity: 1; }
 
-  /* YOU DIED */
-  .died-text {
-    font-size: 52px; font-weight: 700; letter-spacing: 12px;
-    color: #cc2200;
-    text-shadow: 0 0 40px #cc220066, 0 0 80px #cc220033;
-    text-transform: uppercase;
-  }
-
   /* Score screen */
   .score-value { font-size: 72px; font-weight: 700; color: #fff; line-height: 1; }
   .score-label {
@@ -97,10 +89,6 @@
     <div class="prompt">Tap or press Space</div>
   </div>
 
-  <div class="screen" id="diedScreen">
-    <div class="died-text">YOU DIED</div>
-  </div>
-
   <div class="screen" id="scoreScreen">
     <div class="score-label">Score</div>
     <div class="score-value" id="scoreValue">0</div>
@@ -114,7 +102,6 @@ const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const hudEl = document.getElementById('hud');
 const menuScreen = document.getElementById('menuScreen');
-const diedScreen = document.getElementById('diedScreen');
 const scoreScreen = document.getElementById('scoreScreen');
 const scoreValueEl = document.getElementById('scoreValue');
 const scoreBestEl = document.getElementById('scoreBest');
@@ -129,10 +116,17 @@ const PIPE_INTERVAL = 160;
 const GAP_SIZE = 170;
 const PIPE_WIDTH = 56;
 const GROUND_H = 24;
-const CEILING_Y = 10; // drone clamps here, no kill
+const CEILING_Y = 10;
+
+// --- Death sequence timing (frames) ---
+const DEATH_FLASH_DUR = 15;       // red flash
+const DIED_FADE_IN = 50;          // "YOU DIED" fades in over ~0.8s
+const DIED_HOLD = 60;             // holds for ~1s
+const DIED_FADE_OUT = 40;         // fades out over ~0.7s
+const DIED_TOTAL = DEATH_FLASH_DUR + DIED_FADE_IN + DIED_HOLD + DIED_FADE_OUT;
+const SCORE_DELAY = 20;           // pause before score screen
 
 // --- State ---
-// States: menu, play, dying (you died), dead (score screen)
 let state = 'menu';
 let score = 0, best = 0;
 let drone, pipes, particles;
@@ -140,8 +134,9 @@ let frame = 0;
 let deathTimer = 0;
 let screenShake = 0;
 let flashAlpha = 0;
+let globalTick = 0;
 
-// --- Background elements (generated once) ---
+// --- Background (generated once, deterministic) ---
 const bgStars = Array.from({ length: 55 }, () => ({
   x: Math.random() * W,
   y: Math.random() * (H * 0.6),
@@ -149,10 +144,11 @@ const bgStars = Array.from({ length: 55 }, () => ({
   phase: Math.random() * Math.PI * 2
 }));
 
-const farBuildings = Array.from({ length: 24 }, (_, i) => ({
-  x: i * 32 - 10,
-  h: 20 + Math.random() * 45,
-  w: 20 + Math.random() * 12
+const FAR_TILE_W = 320;
+const farBuildings = Array.from({ length: 10 }, (_, i) => ({
+  x: i * 32,
+  h: 20 + Math.sin(i * 2.7 + 1.3) * 18 + Math.cos(i * 4.1) * 12 + 15,
+  w: 20 + ((i * 7 + 3) % 5) * 2
 }));
 
 // --- Init ---
@@ -186,6 +182,7 @@ function flap() {
     spawnThrust();
     return;
   }
+  // Can retry once score screen is visible and settled
   if (state === 'dead' && deathTimer > 30) {
     state = 'menu';
     hideScreen(scoreScreen);
@@ -241,35 +238,30 @@ function drawSky() {
 
 function drawMoon() {
   const mx = W - 90, my = 75, r = 28;
-  // Outer glow
   const glow = ctx.createRadialGradient(mx, my, r * 0.8, mx, my, r * 3);
   glow.addColorStop(0, 'rgba(200, 210, 240, 0.06)');
   glow.addColorStop(1, 'rgba(200, 210, 240, 0)');
   ctx.fillStyle = glow;
   ctx.fillRect(mx - r * 3, my - r * 3, r * 6, r * 6);
 
-  // Crescent: draw full circle, then cut with offset circle
   ctx.save();
   ctx.beginPath();
   ctx.arc(mx, my, r, 0, Math.PI * 2);
   ctx.fillStyle = '#c8cde8';
   ctx.globalAlpha = 0.9;
   ctx.fill();
-
-  // Shadow circle to create crescent
   ctx.globalCompositeOperation = 'destination-out';
   ctx.beginPath();
   ctx.arc(mx + 14, my - 6, r * 0.88, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
-
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';
 }
 
 function drawStars() {
   bgStars.forEach(s => {
-    const a = (Math.sin(s.phase + frame * 0.012) + 1) / 2 * 0.55 + 0.15;
+    const a = (Math.sin(s.phase + globalTick * 0.012) + 1) / 2 * 0.55 + 0.15;
     ctx.globalAlpha = a;
     ctx.fillStyle = '#b0b8d0';
     ctx.beginPath();
@@ -280,12 +272,16 @@ function drawStars() {
 }
 
 function drawFarCity() {
-  const scrollX = (frame * 0.12) % 32;
+  const scrollX = (globalTick * 0.12) % FAR_TILE_W;
   ctx.fillStyle = '#0c0c20';
-  farBuildings.forEach(b => {
-    const bx = ((b.x - scrollX) % (24 * 32) + 24 * 32) % (24 * 32) - 32;
-    ctx.fillRect(bx, H - GROUND_H - b.h, b.w, b.h);
-  });
+  for (let tileOff = -FAR_TILE_W; tileOff < W + FAR_TILE_W; tileOff += FAR_TILE_W) {
+    farBuildings.forEach(b => {
+      const bx = b.x + tileOff - scrollX;
+      if (bx + b.w > -10 && bx < W + 10) {
+        ctx.fillRect(bx, H - GROUND_H - b.h, b.w, b.h);
+      }
+    });
+  }
 }
 
 function drawGround() {
@@ -294,13 +290,13 @@ function drawGround() {
   ctx.fillStyle = '#181830';
   ctx.fillRect(0, H - GROUND_H, W, 2);
   ctx.fillStyle = '#1a1a35';
-  const off = (frame * PIPE_SPEED) % 24;
+  const off = (globalTick * PIPE_SPEED) % 24;
   for (let x = -off; x < W; x += 24) {
     ctx.fillRect(x, H - GROUND_H / 2, 12, 2);
   }
 }
 
-function drawBuilding(x, w, topY, height, fromTop) {
+function drawBuilding(x, w, topY, height, fromTop, pipeId) {
   const seed = Math.round(x + w * 100) | 0;
   const hue = 228 + (seed % 25);
   const lit = 11 + (seed % 5);
@@ -333,6 +329,56 @@ function drawBuilding(x, w, topY, height, fromTop) {
       ctx.fillRect(wx, row, winW, winH);
     }
   }
+
+  // Rooftop ZENATECH neon sign (only some bottom buildings)
+  if (!fromTop && pipeId !== undefined && (pipeId % 4 === 0)) {
+    drawRooftopSign(x, topY, w);
+  }
+}
+
+// --- Pixel font for rooftop sign ---
+const PIXEL_CHARS = {
+  Z: [0b11111,0b00010,0b00100,0b01000,0b11111],
+  E: [0b11111,0b10000,0b11110,0b10000,0b11111],
+  N: [0b10001,0b11001,0b10101,0b10011,0b10001],
+  A: [0b01110,0b10001,0b11111,0b10001,0b10001],
+  T: [0b11111,0b00100,0b00100,0b00100,0b00100],
+  C: [0b01111,0b10000,0b10000,0b10000,0b01111],
+  H: [0b10001,0b10001,0b11111,0b10001,0b10001],
+};
+
+function drawRooftopSign(bx, topY, bw) {
+  const text = 'ZENATECH';
+  const charW = 5, charH = 5, gap = 1, pixelSize = 1;
+  const totalW = text.length * (charW + gap) - gap;
+  const signW = totalW * pixelSize;
+  const sx = bx + (bw - signW) / 2;
+  const sy = topY - 10; // above the building cap
+
+  // Sign glow
+  ctx.globalAlpha = 0.15;
+  ctx.fillStyle = '#00d4ff';
+  ctx.fillRect(sx - 3, sy - 2, signW + 6, charH * pixelSize + 4);
+  ctx.globalAlpha = 1;
+
+  // Draw each character
+  const flicker = Math.sin(globalTick * 0.08 + bx) > -0.8 ? 1 : 0.3; // occasional flicker
+  ctx.globalAlpha = 0.9 * flicker;
+
+  for (let ci = 0; ci < text.length; ci++) {
+    const rows = PIXEL_CHARS[text[ci]];
+    if (!rows) continue;
+    const cx = sx + ci * (charW + gap) * pixelSize;
+    for (let r = 0; r < charH; r++) {
+      for (let c = 0; c < charW; c++) {
+        if ((rows[r] >> (charW - 1 - c)) & 1) {
+          ctx.fillStyle = '#00d4ff';
+          ctx.fillRect(cx + c * pixelSize, sy + r * pixelSize, pixelSize, pixelSize);
+        }
+      }
+    }
+  }
+  ctx.globalAlpha = 1;
 }
 
 function drawDrone(x, y, angle, propPhase) {
@@ -353,7 +399,7 @@ function drawDrone(x, y, angle, propPhase) {
   ctx.fillStyle = '#009abb';
   ctx.fillRect(-3, -4, 6, 9);
 
-  ctx.fillStyle = frame % 40 < 20 ? '#ff2255' : '#551122';
+  ctx.fillStyle = globalTick % 40 < 20 ? '#ff2255' : '#551122';
   ctx.fillRect(-1, -7, 2, 2);
 
   ctx.fillStyle = '#505060';
@@ -389,7 +435,6 @@ function drawParticles() {
 }
 
 function drawVignette() {
-  // Subtle edge darkening
   const g = ctx.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.75);
   g.addColorStop(0, 'rgba(0,0,0,0)');
   g.addColorStop(1, 'rgba(0,0,0,0.35)');
@@ -397,29 +442,85 @@ function drawVignette() {
   ctx.fillRect(0, 0, W, H);
 }
 
-function drawFlash() {
-  if (flashAlpha > 0.01) {
-    ctx.globalAlpha = flashAlpha;
-    ctx.fillStyle = '#ff2200';
+// --- Dark Souls "YOU DIED" (canvas-rendered) ---
+function drawDeathSequence() {
+  if (state !== 'dying') return;
+
+  const t = deathTimer;
+
+  // Phase 1: Red flash (first few frames)
+  if (t < DEATH_FLASH_DUR) {
+    const flashT = 1 - (t / DEATH_FLASH_DUR);
+    ctx.globalAlpha = flashT * 0.4;
+    ctx.fillStyle = '#cc1100';
     ctx.fillRect(0, 0, W, H);
     ctx.globalAlpha = 1;
+  }
+
+  // Phase 2+3+4: "YOU DIED" text with horizontal shadow band
+  const textStart = DEATH_FLASH_DUR;
+  const textT = t - textStart;
+
+  if (textT >= 0) {
+    // Calculate text opacity: fade in -> hold -> fade out
+    let textAlpha = 0;
+    if (textT < DIED_FADE_IN) {
+      // Slow fade in
+      textAlpha = textT / DIED_FADE_IN;
+      textAlpha = textAlpha * textAlpha; // ease-in curve
+    } else if (textT < DIED_FADE_IN + DIED_HOLD) {
+      textAlpha = 1;
+    } else if (textT < DIED_FADE_IN + DIED_HOLD + DIED_FADE_OUT) {
+      const fadeT = (textT - DIED_FADE_IN - DIED_HOLD) / DIED_FADE_OUT;
+      textAlpha = 1 - fadeT;
+    }
+
+    if (textAlpha > 0.01) {
+      // Horizontal shadow band (blurred dark bar across screen center)
+      const bandH = 80;
+      const bandY = H / 2 - bandH / 2;
+      const bandGrad = ctx.createLinearGradient(0, bandY - 20, 0, bandY + bandH + 20);
+      bandGrad.addColorStop(0, 'rgba(0,0,0,0)');
+      bandGrad.addColorStop(0.15, `rgba(0,0,0,${textAlpha * 0.6})`);
+      bandGrad.addColorStop(0.5, `rgba(0,0,0,${textAlpha * 0.75})`);
+      bandGrad.addColorStop(0.85, `rgba(0,0,0,${textAlpha * 0.6})`);
+      bandGrad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = bandGrad;
+      ctx.fillRect(0, bandY - 20, W, bandH + 40);
+
+      // "YOU DIED" text
+      ctx.globalAlpha = textAlpha;
+      ctx.font = '700 48px "Segoe UI", system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      // Red glow layers
+      ctx.shadowColor = '#cc220088';
+      ctx.shadowBlur = 40;
+      ctx.fillStyle = '#bb2200';
+      ctx.fillText('YOU DIED', W / 2, H / 2);
+
+      ctx.shadowBlur = 20;
+      ctx.fillStyle = '#cc2200';
+      ctx.fillText('YOU DIED', W / 2, H / 2);
+
+      ctx.shadowBlur = 0;
+      ctx.shadowColor = 'transparent';
+      ctx.globalAlpha = 1;
+    }
   }
 }
 
 // --- Update ---
 function update() {
-  // Dying state: "YOU DIED" is showing, wait then transition to score
   if (state === 'dying') {
     deathTimer++;
-    flashAlpha *= 0.92;
     if (screenShake > 0.3) screenShake *= 0.82;
-    // Particle physics continues
     updateParticles();
-    // After 90 frames (~1.5s), move to score screen
-    if (deathTimer > 90) {
+    // Transition to score screen after full sequence
+    if (deathTimer > DIED_TOTAL + SCORE_DELAY) {
       state = 'dead';
       deathTimer = 0;
-      hideScreen(diedScreen);
       scoreValueEl.textContent = score;
       scoreBestEl.textContent = `Best: ${best}`;
       showScreen(scoreScreen);
@@ -427,7 +528,6 @@ function update() {
     return;
   }
 
-  // Dead state: score screen showing, wait for input
   if (state === 'dead') {
     deathTimer++;
     updateParticles();
@@ -443,13 +543,11 @@ function update() {
   drone.vy = Math.min(drone.vy, 8);
   drone.y += drone.vy;
 
-  // Ceiling clamp (no kill)
   if (drone.y < CEILING_Y) {
     drone.y = CEILING_Y;
-    drone.vy = Math.max(drone.vy, 0); // stop upward momentum
+    drone.vy = Math.max(drone.vy, 0);
   }
 
-  // Smooth angle
   const targetAngle = Math.max(-0.4, Math.min(0.5, drone.vy * 0.055));
   drone.angle += (targetAngle - drone.angle) * 0.12;
   drone.propPhase += 0.5;
@@ -459,16 +557,16 @@ function update() {
     const minTop = 70;
     const maxTop = H - GAP_SIZE - GROUND_H - 70;
     const topH = minTop + Math.random() * (maxTop - minTop);
+    const id = Math.floor(frame / PIPE_INTERVAL);
     pipes.push(
-      { x: W + 10, w: PIPE_WIDTH, y: 0, h: topH, fromTop: true, scored: false },
-      { x: W + 10, w: PIPE_WIDTH, y: topH + GAP_SIZE, h: H - GROUND_H - topH - GAP_SIZE, fromTop: false }
+      { x: W + 10, w: PIPE_WIDTH, y: 0, h: topH, fromTop: true, scored: false, id },
+      { x: W + 10, w: PIPE_WIDTH, y: topH + GAP_SIZE, h: H - GROUND_H - topH - GAP_SIZE, fromTop: false, id }
     );
   }
 
   pipes.forEach(p => p.x -= PIPE_SPEED);
   pipes = pipes.filter(p => p.x + p.w > -20);
 
-  // Scoring
   for (let i = 0; i < pipes.length; i += 2) {
     if (pipes[i] && !pipes[i].scored && pipes[i].x + pipes[i].w < drone.x - 12) {
       pipes[i].scored = true;
@@ -477,7 +575,6 @@ function update() {
     }
   }
 
-  // Collision
   const hb = { x: drone.x - 10, y: drone.y - 4, w: 20, h: 12 };
   for (const p of pipes) {
     const px = p.x - 2, pw = p.w + 4;
@@ -487,7 +584,6 @@ function update() {
     }
   }
 
-  // Ground kill
   if (drone.y > H - GROUND_H - 8) { drone.y = H - GROUND_H - 8; die(); return; }
 
   updateParticles();
@@ -508,13 +604,8 @@ function die() {
   best = Math.max(best, score);
   deathTimer = 0;
   screenShake = 8;
-  flashAlpha = 0.5;
   spawnExplosion(drone.x, drone.y);
   hudEl.classList.remove('show');
-  // Short delay then show "YOU DIED"
-  setTimeout(() => {
-    if (state === 'dying') showScreen(diedScreen);
-  }, 300);
 }
 
 // --- Render ---
@@ -532,7 +623,7 @@ function render() {
   drawFarCity();
   drawGround();
 
-  pipes.forEach(p => drawBuilding(p.x, p.w, p.y, p.h, p.fromTop));
+  pipes.forEach(p => drawBuilding(p.x, p.w, p.y, p.h, p.fromTop, p.id));
   drawParticles();
 
   if (state === 'play') {
@@ -540,19 +631,19 @@ function render() {
   }
 
   drawVignette();
-  drawFlash();
+  drawDeathSequence();
 
   ctx.restore();
 
-  // Menu idle drone (drawn outside shake context)
+  // Menu idle drone
   if (state === 'menu') {
-    frame++;
     drone.propPhase += 0.5;
-    drone.y = H / 2 + Math.sin(frame * 0.025) * 14;
-    drone.angle = Math.sin(frame * 0.018) * 0.04;
+    drone.y = H / 2 + Math.sin(globalTick * 0.025) * 14;
+    drone.angle = Math.sin(globalTick * 0.018) * 0.04;
     drawDrone(drone.x, drone.y, drone.angle, drone.propPhase);
   }
 
+  globalTick++;
   update();
   requestAnimationFrame(render);
 }
