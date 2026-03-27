@@ -620,9 +620,9 @@
     // Menu: large tilted hero drone, animates to play position on tap
     if (state === 'menu') {
       drone.propPhase += 0.5;
-      var heroX = W / 2 - 14;
-      var heroY = H / 2 + 25 + Math.sin(FD.globalTick * 0.02) * 10;
-      var heroAngle = -0.25 + Math.sin(FD.globalTick * 0.015) * 0.05;
+      var heroX = W / 2;
+      var heroY = 370 + Math.sin(FD.globalTick * 0.02) * 8;
+      var heroAngle = -0.2 + Math.sin(FD.globalTick * 0.015) * 0.05;
       ctx.save();
       ctx.translate(heroX, heroY);
       ctx.rotate(heroAngle);
@@ -639,7 +639,7 @@
       var fadeElapsed = performance.now() - fadeStartTime;
       var fadeProgress = Math.min(1, fadeElapsed / 600);
       var ep = 1 - Math.pow(1 - fadeProgress, 3);
-      var fromX = W / 2 - 14, fromY = H / 2 + 25, fromAngle = -0.25, fromScale = 2.8;
+      var fromX = W / 2, fromY = 370, fromAngle = -0.2, fromScale = 2.8;
       var toX = 100, toY = H / 2, toAngle = 0, toScale = 1.15;
       var cx = fromX + (toX - fromX) * ep;
       var cy = fromY + (toY - fromY) * ep;

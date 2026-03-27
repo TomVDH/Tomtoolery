@@ -43,17 +43,25 @@
         document.getElementById('gameSlogan').textContent = pick.slogan;
       })();
     </script>
-    <div class="mode-picker">
-      <span class="mode-arrow" id="modeLeft">◀</span>
-      <span class="mode-label" id="modeLabel">CLASSIC</span>
-      <span class="mode-arrow" id="modeRight">▶</span>
+    <div class="menu-section">
+      <div class="menu-section-label">MODE</div>
+      <div class="mode-picker">
+        <span class="mode-arrow" id="modeLeft">◀</span>
+        <span class="mode-label" id="modeLabel">CLASSIC</span>
+        <span class="mode-arrow" id="modeRight">▶</span>
+      </div>
+      <div class="mode-desc" id="modeDesc">Endless flight</div>
     </div>
-    <div class="mode-desc" id="modeDesc">Endless flight</div>
-    <div class="drone-picker">
-      <span class="drone-arrow" id="droneLeft">◀</span>
-      <span class="drone-label" id="droneLabel">PIXEL QUAD</span>
-      <span class="drone-arrow" id="droneRight">▶</span>
+
+    <div class="menu-section">
+      <div class="menu-section-label">DRONE</div>
+      <div class="drone-picker">
+        <span class="drone-arrow" id="droneLeft">◀</span>
+        <span class="drone-label" id="droneLabel">PIXEL QUAD</span>
+        <span class="drone-arrow" id="droneRight">▶</span>
+      </div>
     </div>
+
     <div class="prompt">Tap or press Space</div>
   </div>
 
