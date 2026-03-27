@@ -68,7 +68,7 @@
   const hudTimerEl = document.getElementById('hudTimer');
 
   // --- Secret win ---
-  const WIN_SCORE = 65;
+  const WIN_SCORE = 100;
 
   // --- Neon sign data for pipe buildings ---
   const roofTexts  = ['IQ NANO', 'ZD1000', 'PP-1', 'IQ SQUARE', 'ZenaGames', 'ZENATECH', 'DRONE CO', 'SKYNET', 'HOVER', 'APEX', 'VOLT', 'NIMBUS'];
@@ -397,7 +397,7 @@
     state = 'dying';
     best = Math.max(best, score);
     deathTimer = 0;
-    FD.deathText = 'YOU WIN';
+    FD.deathText = 'ZENAVLLE IS SAVED';
     FD.screenShake = 0;
     hudEl.classList.remove('show');
     hudTimerEl.style.display = 'none';
@@ -631,8 +631,8 @@
           });
         }
 
-        // Secret win condition
-        if (score >= WIN_SCORE) { win(); return; }
+        // Win condition — Rush only (Classic is endless)
+        if (activeMode === 'rush' && score >= WIN_SCORE) { win(); return; }
       }
     }
 
