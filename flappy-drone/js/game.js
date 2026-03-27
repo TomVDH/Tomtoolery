@@ -518,7 +518,7 @@
       // CLASSIC — constant physics, progressive oscillation
       curGap    = 155;                                     // constant gap
       curSpeed  = 2.8;                                     // constant speed
-      curSpacing = 200;                                    // constant pixel distance between pipes
+      curSpacing = 160;                                    // constant pixel distance between pipes
     }
 
     // ── Spawn pipes ─────────────────────────────────────────────
@@ -548,23 +548,23 @@
       if (activeMode === 'rush') {
         maxDrift = Math.max(120, 200 - Math.min(1, curSpeed / 12) * 60);
         biasAmt  = 0.45;
-      } else if (score < 10) {
-        // Tier 1 (gates 0–9): gentle, gaps stay near middle
-        maxDrift = 80;
-        biasAmt  = 0.15;
-      } else if (score < 20) {
-        // Tier 2 (gates 10–19): full range, alternation kicks in
-        maxDrift = 150;
-        biasAmt  = 0.35;
-      } else if (score < 30) {
-        // Tier 3 (gates 20–29): aggressive swings top↔bottom
+      } else if (score < 8) {
+        // Tier 1 (gates 0–7): moderate drift, learning phase
+        maxDrift = 120;
+        biasAmt  = 0.25;
+      } else if (score < 18) {
+        // Tier 2 (gates 8–17): full range, strong alternation
         maxDrift = 200;
-        biasAmt  = 0.50;
+        biasAmt  = 0.45;
+      } else if (score < 30) {
+        // Tier 3 (gates 18–29): aggressive swings top↔bottom
+        maxDrift = 250;
+        biasAmt  = 0.55;
       } else {
         // Tier 4 (gates 30+): max oscillation + trap potential
-        // Occasional same-height repeat followed by a big jump
-        maxDrift = 220;
-        biasAmt  = (Math.random() < 0.25) ? 0.05 : 0.55; // 25% chance of "trap" (stays put)
+        // 25% chance gap stays at same height, then jumps hard
+        maxDrift = 280;
+        biasAmt  = (Math.random() < 0.25) ? 0.05 : 0.60;
       }
 
       // Alternation bias — push toward opposite side of screen centre
