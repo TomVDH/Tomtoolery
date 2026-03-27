@@ -45,10 +45,10 @@
     color: transparent;
     -webkit-text-stroke: 1.5px rgba(160, 180, 220, 0.8);
     text-shadow: 0 0 30px #00d4ff22, 0 0 60px #1a2a5511;
-    transition: transform 0.05s;
+    pointer-events: auto; cursor: default;
   }
   .title:hover {
-    animation: jitter 0.08s infinite;
+    animation: jitter 0.06s infinite;
   }
   @keyframes jitter {
     0% { transform: translate(0, 0); }
@@ -66,9 +66,10 @@
     text-transform: uppercase; margin-top: 10px;
   }
   .copyright {
+    position: absolute; bottom: 16px; left: 0; right: 0;
+    text-align: center;
     font-family: 'Courier New', monospace;
-    font-size: 9px; color: #445; letter-spacing: 1px;
-    margin-top: 14px;
+    font-size: 11px; color: #556; letter-spacing: 1.5px;
   }
   .prompt {
     margin-top: 28px; font-size: 13px; color: #445; letter-spacing: 1px;
