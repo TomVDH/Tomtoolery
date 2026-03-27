@@ -16,12 +16,19 @@
   const scoreValueEl = document.getElementById('scoreValue');
   const scoreBestEl  = document.getElementById('scoreBest');
 
+  const hudSpeedEl = document.getElementById('hudSpeed');
+  const loreEl     = document.getElementById('loreDialog');
+
   // --- Local game state (not on FD) ---
-  let state = 'menu'; // menu | ready | play | dying | dead | fading | nuking | nukeFall
+  let state = 'menu'; // menu | lore | ready | play | dying | dead | fading | nuking | nukeFall
+  let deathSkippable = false; // true once fade-in completes
   let score = 0, best = 0;
   let drone = { x: 100, y: H / 2, vy: 0, angle: 0, propPhase: 0 };
   let pipes = [];
   let curSpeed = 0;
+  let groundScroll = 0;   // accumulated ground offset (tracks curSpeed)
+  let farCityScroll = 0;  // accumulated far-city offset (tracks curSpeed)
+  let lastGapCenterY = H / 2; // track last gap center to constrain placement
   let frame = 0;
   let deathTimer = 0;
   let readyStartTime = 0;
@@ -73,20 +80,27 @@
     pipes = [];
     score = 0;
     frame = 0;
+    groundScroll = 0;
+    farCityScroll = 0;
+    lastGapCenterY = H / 2;
     deathTimer = 0;
     hudEl.textContent = '0';
 
-    // Zena Rush timer
+    // Speed HUD
+    hudSpeedEl.style.display = 'none';
+    hudSpeedEl.classList.remove('show');
+    deathSkippable = false;
+
+    // Lore dialog
+    loreEl.classList.remove('show');
+    loreEl.style.display = 'none';
+
+    // Zena Rush timer — always hidden until play starts
     rushTimer = RUSH_START_TIME;
     rushLastBonus = 0;
     rushBonusFlash = 0;
-    if (activeMode === 'rush') {
-      hudTimerEl.style.display = 'block';
-      hudTimerEl.textContent = rushTimer.toFixed(1);
-      hudTimerEl.classList.remove('critical');
-    } else {
-      hudTimerEl.style.display = 'none';
-    }
+    hudTimerEl.style.display = 'none';
+    hudTimerEl.classList.remove('critical');
 
     // Expose canvas + ctx to shared modules
     FD.ctx    = ctx;
@@ -105,15 +119,25 @@
       FD.hideScreen(menuScreen);
       init();
       trackEvent('game_start', { drone: activeDroneType, mode: activeMode });
-      // Delay ready state until menu fade completes
-      state = 'fading';
-      fadeStartTime = performance.now();
-      setTimeout(function () {
-        state = 'ready';
-        readyStartTime = performance.now();
-        FD.readyStartTime = readyStartTime;
-        readyT = 0;
-      }, 650);
+
+      // Zena Rush: show lore dialog first
+      if (activeMode === 'rush') {
+        state = 'lore';
+        loreEl.style.display = 'flex';
+        loreEl.classList.add('show');
+        return;
+      }
+
+      // Classic: go straight to fade → ready
+      startFadeToReady();
+      return;
+    }
+
+    // Dismiss lore dialog → proceed to fade
+    if (state === 'lore') {
+      loreEl.classList.remove('show');
+      setTimeout(function () { loreEl.style.display = 'none'; }, 400);
+      startFadeToReady();
       return;
     }
 
@@ -125,6 +149,17 @@
       return;
     }
 
+    // Skip death sequence once fade-in is done
+    if (state === 'dying' && deathSkippable) {
+      state = 'dead';
+      deathTimer = 0;
+      deathSkippable = false;
+      scoreValueEl.textContent = score;
+      scoreBestEl.textContent = 'Best: ' + best;
+      FD.showScreen(scoreScreen);
+      return;
+    }
+
     // Can retry once score screen is visible and settled
     if (state === 'dead' && deathTimer > 30) {
       state = 'menu';
@@ -133,6 +168,17 @@
       hudEl.classList.remove('show');
       init();
     }
+  }
+
+  function startFadeToReady() {
+    state = 'fading';
+    fadeStartTime = performance.now();
+    setTimeout(function () {
+      state = 'ready';
+      readyStartTime = performance.now();
+      FD.readyStartTime = readyStartTime;
+      readyT = 0;
+    }, 650);
   }
 
   // ---------------------------------------------------------------
@@ -290,12 +336,37 @@
     state = 'dying';
     best = Math.max(best, score);
     deathTimer = 0;
-    FD.deathText = 'YOU DIED';
+    FD.deathText = activeMode === 'rush' ? 'ZENAVLLE HAS FALLEN' : 'YOU DIED';
     FD.screenShake = 8;
     FD.spawnExplosion(drone.x, drone.y);
+    deathSkippable = false;
     hudEl.classList.remove('show');
+    hudSpeedEl.classList.remove('show');
     hudTimerEl.style.display = 'none';
     trackEvent('game_over', { score: score, best: best, drone: activeDroneType, mode: activeMode });
+
+    // Zena Rush: nuke goes off after the crash
+    if (activeMode === 'rush') {
+      setTimeout(function () {
+        if (state === 'dying') {
+          FD.nukeActive = true;
+          FD.nukeStart = performance.now();
+          FD.nukeGx = W / 2 + (Math.random() - 0.5) * 80;
+          FD.nukeGy = H - FD.GROUND_H;
+          FD.screenShake = 30;
+          // Viewport glow
+          var wrap = document.getElementById('wrap');
+          wrap.classList.add('nuke-glow');
+          setTimeout(function () {
+            wrap.classList.remove('nuke-glow');
+            wrap.classList.add('nuke-glow-fade');
+          }, 1200);
+          setTimeout(function () {
+            wrap.classList.remove('nuke-glow-fade');
+          }, 6000);
+        }
+      }, 1500);
+    }
   }
 
   // --- Nuke death (Zena Rush timeout) ---
@@ -338,10 +409,15 @@
       deathTimer++;
       if (FD.screenShake > 0.3) FD.screenShake *= 0.82;
       FD.updateParticles();
+      // Mark skippable once the text has fully faded in
+      if (deathTimer > FD.DEATH_FLASH_DUR + FD.DIED_FADE_IN) {
+        deathSkippable = true;
+      }
       // Transition to score screen after full sequence
       if (deathTimer > FD.DIED_TOTAL + FD.SCORE_DELAY) {
         state = 'dead';
         deathTimer = 0;
+        deathSkippable = false;
         scoreValueEl.textContent = score;
         scoreBestEl.textContent = 'Best: ' + best;
         FD.showScreen(scoreScreen);
@@ -390,6 +466,12 @@
       if (readyT >= 1) {
         state = 'play';
         hudEl.classList.add('show');
+        hudSpeedEl.style.display = 'block';
+        hudSpeedEl.classList.add('show');
+        if (activeMode === 'rush') {
+          hudTimerEl.style.display = 'block';
+          hudTimerEl.textContent = rushTimer.toFixed(1);
+        }
       }
       return;
     }
@@ -419,39 +501,55 @@
     if (activeMode === 'rush') {
       // ZENA RUSH: starts fast, ramps brutally
       var rushBuildT = Math.min(1, score / 20);
-      curGap = FD.GAP_SIZE - rushBuildT * 55;             // 170 → 115
-      curInterval = Math.round(FD.PIPE_INTERVAL - rushBuildT * 50); // 160 → 110
+      // Gap stays wide until score 8, then narrows
+      var rushGapT = score < 8 ? 0 : Math.min(1, (score - 8) / 20);
+      curGap = FD.GAP_SIZE - rushGapT * 65;               // 175 → 110
+      curInterval = Math.round(80 - rushBuildT * 25);               // 80 → 55
       // Speed: starts at 9.45 (450% of Classic 2.1), ramps to 12
       var rushSpeedT = Math.min(1, score / 30);
       curSpeed = 9.45 + rushSpeedT * 2.55;                // 9.45 → 12
     } else {
-      // CLASSIC: phased ramp
-      // Phase 1 (score 0-7): easy cruising
-      // Phase 2 (score 8+): buildings widen, gaps shrink, interval tightens
-      // Phase 3 (score 15+): speed ramps aggressively
-      var buildT = Math.max(0, Math.min(1, (score - 8) / 27));
-      curGap = FD.GAP_SIZE - buildT * 60;                 // 170 → 110
-      curInterval = Math.round(FD.PIPE_INTERVAL - buildT * 60); // 160 → 100
-      var speedT = Math.max(0, Math.min(1, (score - 15) / 30));
-      speedT = speedT * speedT;
-      curSpeed = FD.PIPE_SPEED + speedT * 2.0;            // 2.1 → 4.1
+      // CLASSIC: speed & spacing ramp together
+      var buildT = Math.min(1, score / 25);
+      // Gap stays generous until score 10, then shrinks steadily
+      var gapT = score < 10 ? 0 : Math.min(1, (score - 10) / 20);
+      curGap = FD.GAP_SIZE - gapT * 75;                   // 175 → 100
+      curInterval = Math.round(FD.PIPE_INTERVAL - buildT * 30); // 110 → 80
+      // Speed: noticeable jump at gate 5, keeps climbing
+      var speedT;
+      if (score < 5) {
+        speedT = 0;
+      } else {
+        speedT = Math.min(1, (score - 5) / 20);
+      }
+      curSpeed = FD.PIPE_SPEED + speedT * 3.5;            // 2.4 → 5.9
     }
 
-    // Spawn pipes — buildings get wider as difficulty increases
+    // Spawn pipes — gap Y constrained to prevent impossible sequences
     if (frame % curInterval === 0) {
       var minTop = 70;
       var maxTop = H - curGap - FD.GROUND_H - 70;
-      var topH   = minTop + Math.random() * (maxTop - minTop);
-      var id     = Math.floor(frame / curInterval);
+      // Max drift from last gap center — tighter at higher speed
+      var driftRatio = Math.min(1, (curSpeed - FD.PIPE_SPEED) / 3.5);
+      var maxDrift = Math.max(80, 150 - driftRatio * 70); // 150px early → 80px at peak
+      var lastCenter = lastGapCenterY;
+      // Clamp the random range around the last gap center
+      var driftMin = Math.max(minTop, lastCenter - curGap / 2 - maxDrift);
+      var driftMax = Math.min(maxTop, lastCenter - curGap / 2 + maxDrift);
+      if (driftMin > driftMax) driftMin = driftMax; // safety
+      var topH = driftMin + Math.random() * (driftMax - driftMin);
+      lastGapCenterY = topH + curGap / 2;
+      var id = Math.floor(frame / curInterval);
       // Width: before score 15 = standard only; after = increasingly wide
       var widthRoll = ((id * 31 + 17) * 53) % 100;
       var pipeW;
-      if (score < 15) {
-        pipeW = FD.PIPE_WIDTH; // all standard before 15
+      if (score < 8) {
+        pipeW = FD.PIPE_WIDTH; // standard only for first few gates
       } else {
-        // More wide buildings as score climbs: wide chance 20% → 50%
-        var wideChance = 20 + buildT * 30;
-        pipeW = widthRoll < (100 - wideChance) ? FD.PIPE_WIDTH : FD.PIPE_WIDTH + 20 + Math.floor(buildT * 16);
+        // Wide buildings start at gate 8, chance 15% → 50%
+        var bt = (activeMode === 'rush') ? Math.min(1, score / 20) : buildT;
+        var wideChance = 15 + bt * 35;
+        pipeW = widthRoll < (100 - wideChance) ? FD.PIPE_WIDTH : FD.PIPE_WIDTH + 20 + Math.floor(bt * 20);
       }
       pipes.push(
         { x: W + 10, w: pipeW, y: 0,             h: topH,                                   fromTop: true,  scored: false, id: id },
@@ -499,6 +597,9 @@
       }
     }
 
+    // Speed HUD
+    hudSpeedEl.textContent = curSpeed.toFixed(1) + 'x';
+
     // Collision detection
     var hb = { x: drone.x - 10, y: drone.y - 4, w: 20, h: 12 };
     for (var j = 0; j < pipes.length; j++) {
@@ -531,6 +632,10 @@
       }
     }
 
+    // Accumulate scroll offsets so background tracks actual speed
+    groundScroll += curSpeed;
+    farCityScroll += curSpeed * 0.05; // parallax ratio
+
     FD.updateParticles();
     FD.updateFireworks();
   }
@@ -554,28 +659,32 @@
     FD.drawClouds();
     FD.drawNukeCloud();
 
-    // Far city parallax
-    var scrollX = (FD.globalTick * 0.12) % FD.FAR_TILE_W;
+    // Far city parallax — tracks actual game speed
+    var scrollX = (state === 'play' || state === 'dying' || state === 'dead')
+      ? farCityScroll % FD.FAR_TILE_W
+      : (FD.globalTick * 0.12) % FD.FAR_TILE_W;
     FD.drawFarCity(scrollX);
 
-    // Ground
-    var scrollOffset = (FD.globalTick * FD.PIPE_SPEED) % 24;
+    // Ground — tracks actual game speed
+    var scrollOffset = (state === 'play' || state === 'dying' || state === 'dead')
+      ? groundScroll % 24
+      : (FD.globalTick * FD.PIPE_SPEED) % 24;
     FD.drawGround(scrollOffset);
 
-    // Gap danger marker — show ONLY the next incoming gap on right edge when speed is high
-    if (curSpeed > 2.5) {
+    // Gap danger marker — only at high speeds (Rush always, Classic after speed ramp kicks in)
+    if (state === 'play' && curSpeed > 4.0) {
       var markerShown = false;
       for (var gi = 0; gi < pipes.length && !markerShown; gi += 2) {
         var gp = pipes[gi];
         if (!gp) continue;
-        // Show for the first pipe that's still ahead of the drone (even partially onscreen)
-        if (gp.x + gp.w > W * 0.7 && gp.x > drone.x + 50) {
+        // Show for the first pipe approaching — early lead-up while still off-screen
+        if (gp.x > drone.x + 40) {
           markerShown = true;
           var gapTopY = gp.h; // bottom of top pipe = top of gap
           var gapBotY = pipes[gi+1] ? pipes[gi+1].y : gapTopY + 140;
           var gapCenterY = (gapTopY + gapBotY) / 2;
-          // Fade based on distance: closer = more opaque
-          var distFade = 1 - Math.min(1, Math.max(0, gp.x - W) / 200);
+          // Fade based on distance: fades in smoothly over a wider range
+          var distFade = 1 - Math.min(1, Math.max(0, gp.x - W * 0.6) / 300);
           var pulse = 0.6 + 0.4 * Math.sin(FD.globalTick * 0.12);
           var markerAlpha = distFade * pulse * 0.7;
           // Draw chevron marker at right edge
@@ -583,13 +692,13 @@
           ctx.globalAlpha = markerAlpha;
           var mx = W - 12;
           // Gap extent bracket
-          ctx.strokeStyle = 'rgba(255,136,0,0.5)';
+          ctx.strokeStyle = 'rgba(0,212,255,0.5)';
           ctx.lineWidth = 2;
           ctx.beginPath();
           ctx.moveTo(mx + 4, gapTopY); ctx.lineTo(mx - 2, gapTopY); ctx.lineTo(mx - 2, gapBotY); ctx.lineTo(mx + 4, gapBotY);
           ctx.stroke();
           // Centre chevron
-          ctx.fillStyle = '#ff8800';
+          ctx.fillStyle = '#00d4ff';
           ctx.beginPath();
           ctx.moveTo(mx + 8, gapCenterY - 8);
           ctx.lineTo(mx, gapCenterY);

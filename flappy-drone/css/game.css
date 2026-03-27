@@ -45,12 +45,23 @@ canvas { display: block; width: 100%; height: 100%; }
   padding-top: 100px;
 }
 .title {
-  font-family: 'Courier New', monospace;
-  font-size: 38px; font-weight: 700; letter-spacing: 6px;
+  font-family: Impact, 'Arial Black', system-ui, sans-serif;
+  font-size: 46px; font-weight: 700; letter-spacing: 4px;
   color: transparent;
-  -webkit-text-stroke: 1.5px rgba(160, 180, 220, 0.8);
-  text-shadow: 0 0 30px #00d4ff22, 0 0 60px #1a2a5511;
+  -webkit-text-stroke: 1.5px #c8d4e0;
+  text-shadow: 2px 0 #00d4ff, -2px 0 #ff3366;
+  text-transform: uppercase;
+  padding-bottom: 14px;
+  position: relative;
   pointer-events: auto; cursor: default;
+}
+.title::after {
+  content: '';
+  display: block;
+  width: 100%;
+  height: 3px;
+  margin-top: 14px;
+  background: linear-gradient(90deg, transparent 0%, #00d4ff 30%, #00d4ff 70%, transparent 100%);
 }
 .title:hover { animation: jitter 0.06s infinite; }
 @keyframes jitter {
@@ -61,7 +72,7 @@ canvas { display: block; width: 100%; height: 100%; }
   100% { transform: translate(1px, 1px); }
 }
 .slogan {
-  font-size: 12px; color: #556; letter-spacing: 2px;
+  font-size: 13px; color: #99a4b0; letter-spacing: 2px;
   font-style: italic; margin-top: 6px; margin-bottom: 28px;
 }
 .menu-section {
@@ -69,7 +80,7 @@ canvas { display: block; width: 100%; height: 100%; }
 }
 .menu-section-label {
   font-family: 'Courier New', monospace;
-  font-size: 8px; letter-spacing: 3px; color: #334;
+  font-size: 10px; letter-spacing: 3px; color: #8892a0;
   text-transform: uppercase; margin-bottom: 6px;
   text-align: center;
 }
@@ -79,17 +90,17 @@ canvas { display: block; width: 100%; height: 100%; }
 }
 .mode-label {
   font-family: 'Courier New', monospace;
-  font-size: 13px; letter-spacing: 4px; color: #f80;
+  font-size: 13px; letter-spacing: 4px; color: #00d4ff;
   text-transform: uppercase; min-width: 140px; text-align: center;
   cursor: pointer; font-weight: 700;
 }
 .mode-arrow {
-  font-size: 14px; color: #334; cursor: pointer; padding: 4px 10px;
+  font-size: 16px; color: #7a8494; cursor: pointer; padding: 4px 10px;
   transition: color 0.2s; user-select: none;
 }
-.mode-arrow:hover { color: #f80; }
+.mode-arrow:hover { color: #00d4ff; }
 .mode-desc {
-  font-size: 10px; color: #445; letter-spacing: 1px; margin-top: 4px;
+  font-size: 11px; color: #8a95a5; letter-spacing: 1px; margin-top: 4px;
   font-style: italic; margin-bottom: 24px;
 }
 .drone-picker {
@@ -98,44 +109,57 @@ canvas { display: block; width: 100%; height: 100%; }
 }
 .drone-label {
   font-family: 'Courier New', monospace;
-  font-size: 10px; letter-spacing: 2px; color: #00c8f0;
+  font-size: 12px; letter-spacing: 2px; color: #00c8f0;
   text-transform: uppercase; min-width: 140px; text-align: center;
   cursor: pointer;
 }
 .drone-arrow {
-  font-size: 14px; color: #334; cursor: pointer; padding: 4px 10px;
+  font-size: 16px; color: #7a8494; cursor: pointer; padding: 4px 10px;
   transition: color 0.2s; user-select: none;
 }
 .drone-arrow:hover { color: #00c8f0; }
 .copyright {
   text-align: center; margin-top: 10px;
   font-family: 'Courier New', monospace;
-  font-size: 10px; color: #445; letter-spacing: 1.5px;
+  font-size: 10px; color: #6a7585; letter-spacing: 1.5px;
 }
 /* Drone renders on canvas below pickers — prompt sits below drone */
 .prompt {
   position: absolute; bottom: 110px; left: 0; right: 0;
   text-align: center;
-  font-size: 14px; color: #445; letter-spacing: 2px;
+  font-size: 14px; color: #8a95a5; letter-spacing: 2px;
   animation: pulse 2.5s ease-in-out infinite;
 }
 @keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
 
 /* HUD */
 .hud {
-  position: absolute; top: 20px; left: 0; right: 0;
+  position: absolute; top: 16px; left: 0; right: 0;
   text-align: center; pointer-events: none;
-  font-size: 40px; font-weight: 700; color: #fff;
-  text-shadow: 0 2px 12px #00000066;
+  font-family: 'Courier New', monospace;
+  font-size: 36px; font-weight: 700; color: #e8ecf0;
+  letter-spacing: 3px;
+  text-shadow: 0 0 8px #00000088, 0 2px 6px #00000066;
   opacity: 0; transition: opacity 0.3s;
   font-variant-numeric: tabular-nums;
 }
 .hud.show { opacity: 1; }
+.hud-speed {
+  position: absolute; bottom: 4px; left: 8px;
+  pointer-events: none;
+  font-size: 9px; font-weight: 600; color: #6a7585;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 0.5px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0; transition: opacity 0.3s;
+  z-index: 5;
+}
+.hud-speed.show { opacity: 1; }
 .hud-timer {
   position: absolute; top: 58px; left: 0; right: 0;
   text-align: center; pointer-events: none;
-  font-size: 18px; font-weight: 700; color: #f80;
-  text-shadow: 0 0 8px #f8000066;
+  font-size: 18px; font-weight: 700; color: #00d4ff;
+  text-shadow: 0 0 8px #00d4ff66;
   font-family: 'Courier New', monospace;
   letter-spacing: 2px;
   font-variant-numeric: tabular-nums;
@@ -148,19 +172,106 @@ canvas { display: block; width: 100%; height: 100%; }
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
 }
-.score-value { font-size: 72px; font-weight: 700; color: #fff; line-height: 1; }
+.score-value {
+  font-family: 'Courier New', monospace;
+  font-size: 72px; font-weight: 700; color: #fff; line-height: 1;
+}
 .score-label {
-  font-size: 12px; color: #445; letter-spacing: 3px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px; color: #8892a0; letter-spacing: 3px;
   text-transform: uppercase; margin-bottom: 8px;
 }
-.score-best { font-size: 13px; color: #334; margin-top: 10px; }
+.score-best {
+  font-family: 'Courier New', monospace;
+  font-size: 13px; color: #7a8494; margin-top: 10px;
+}
 .score-prompt {
-  font-size: 13px; color: #445; margin-top: 32px; letter-spacing: 1px;
+  font-size: 13px; color: #8a95a5; margin-top: 32px; letter-spacing: 1px;
   animation: pulse 2.5s ease-in-out infinite;
 }
+/* Lore dialog (Zena Rush pre-game) */
+.lore-dialog {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; justify-content: center; align-items: center;
+  padding: 60px 50px;
+  background: rgba(5, 5, 16, 0.82);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  opacity: 0; transition: opacity 0.4s ease;
+  z-index: 10;
+}
+.lore-dialog.show { opacity: 1; }
+.lore-title {
+  font-family: 'Courier New', monospace;
+  font-size: 12px; font-weight: 700; letter-spacing: 3px;
+  color: #00d4ff; margin-bottom: 6px;
+  text-shadow: 0 0 12px #00d4ff44;
+}
+.lore-subtitle {
+  font-family: 'Courier New', monospace;
+  font-size: 10px; letter-spacing: 3px; color: #5a6a7a;
+  margin-bottom: 20px;
+}
+.lore-body {
+  font-size: 13px; line-height: 1.8; color: #8a95a5;
+  letter-spacing: 0.5px; text-align: center;
+  max-width: 420px;
+}
+/* Glitch text effect for ZD OVER 9000 */
+.lore-glitch {
+  position: relative;
+  display: inline-block;
+  color: #00d4ff;
+  font-weight: 700;
+  font-style: normal;
+  animation: glitch-buzz 3s infinite;
+}
+.lore-glitch::before,
+.lore-glitch::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  overflow: hidden;
+}
+.lore-glitch::before {
+  color: #ff3366;
+  animation: glitch-shift-1 2.5s infinite;
+  clip-path: inset(0 0 60% 0);
+}
+.lore-glitch::after {
+  color: #00d4ff;
+  animation: glitch-shift-2 3s infinite;
+  clip-path: inset(60% 0 0 0);
+}
+@keyframes glitch-buzz {
+  0%, 92%, 100% { transform: translate(0, 0); }
+  93% { transform: translate(-1px, 1px); }
+  95% { transform: translate(1px, -1px); }
+  97% { transform: translate(-1px, 0); }
+}
+@keyframes glitch-shift-1 {
+  0%, 88%, 100% { transform: translate(0, 0); }
+  89% { transform: translate(2px, 0); }
+  91% { transform: translate(-1px, 0); }
+  93% { transform: translate(1px, 0); }
+}
+@keyframes glitch-shift-2 {
+  0%, 90%, 100% { transform: translate(0, 0); }
+  91% { transform: translate(-2px, 0); }
+  93% { transform: translate(1px, 0); }
+  95% { transform: translate(-1px, 0); }
+}
+
+.lore-prompt {
+  margin-top: 32px;
+  font-size: 13px; color: #8a95a5; letter-spacing: 2px;
+  animation: pulse 2.5s ease-in-out infinite;
+}
+
 .version {
   position: absolute; bottom: 4px; right: 8px;
   font-family: 'Courier New', monospace;
-  font-size: 9px; color: #556; letter-spacing: 0.5px;
+  font-size: 9px; color: #6a7585; letter-spacing: 0.5px;
   pointer-events: auto; cursor: default; z-index: 5;
 }
