@@ -13,8 +13,20 @@
   <div class="hud" id="hud">0</div>
 
   <div class="screen show" id="menuScreen">
-    <div class="title">FLAPPY DRONE</div>
-    <div class="slogan">Building the drone as we're flying it</div>
+    <div class="title" id="gameTitle">FLAPPY DRONE</div>
+    <div class="slogan" id="gameSlogan">Building the drone as we're flying it</div>
+    <script>
+      (function(){
+        var titles = [
+          { name: 'FLAPPY DRONE', slogan: "Building the drone as we're flying it" },
+          { name: 'ROTORHEAD', slogan: 'fly. crash. repeat.' },
+          { name: 'SKY RAT', slogan: 'the city is your obstacle course' }
+        ];
+        var pick = titles[Math.floor(Math.random() * titles.length)];
+        document.getElementById('gameTitle').textContent = pick.name;
+        document.getElementById('gameSlogan').textContent = pick.slogan;
+      })();
+    </script>
     <div class="drone-picker">
       <span class="drone-arrow" id="droneLeft">◀</span>
       <span class="drone-label" id="droneLabel">PIXEL QUAD</span>

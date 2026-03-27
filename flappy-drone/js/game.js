@@ -36,6 +36,9 @@
     disc: 'FLYING SAUCER', spider: 'ARACHNID HEX'
   };
   let droneIndex = 0;
+  const FRAME_MS = 1000 / 60; // fixed 60fps timestep
+  let lastFrameTime = performance.now();
+  let updateAccum = 0;
 
   // --- Neon sign data for pipe buildings ---
   const roofTexts  = ['IQ NANO', 'ZD1000', 'PP-1', 'IQ SQUARE', 'ZenaGames', 'ZENATECH', 'DRONE CO', 'SKYNET', 'HOVER', 'APEX', 'VOLT', 'NIMBUS'];
@@ -510,10 +513,18 @@
       FD.drawDrone(drone.x, drone.y, drone.angle, drone.propPhase, activeDroneType);
     }
 
-    // Advance global tick, then run fireworks + game update
-    FD.globalTick++;
-    FD.updateFireworks();
-    update();
+    // Fixed timestep: update logic at 60fps regardless of display refresh rate
+    var now = performance.now();
+    updateAccum += now - lastFrameTime;
+    lastFrameTime = now;
+    // Cap accumulator to prevent spiral of death on tab-switch
+    if (updateAccum > FRAME_MS * 4) updateAccum = FRAME_MS * 4;
+    while (updateAccum >= FRAME_MS) {
+      FD.globalTick++;
+      FD.updateFireworks();
+      update();
+      updateAccum -= FRAME_MS;
+    }
 
     requestAnimationFrame(render);
   }

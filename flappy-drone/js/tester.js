@@ -5,6 +5,9 @@
 (function () {
   const FD = window.FD;
   const W = FD.W, H = FD.H, GROUND_H = FD.GROUND_H;
+  const TESTER_FRAME_MS = 1000 / 60;
+  var testerLastFrame = performance.now();
+  var testerAccum = 0;
 
   // --- DOM refs ---
   const canvas = document.getElementById('game');
@@ -319,8 +322,16 @@
 
     ctx.restore();
 
-    FD.globalTick++;
-    update();
+    // Fixed 60fps timestep
+    var now = performance.now();
+    testerAccum += now - testerLastFrame;
+    testerLastFrame = now;
+    if (testerAccum > TESTER_FRAME_MS * 4) testerAccum = TESTER_FRAME_MS * 4;
+    while (testerAccum >= TESTER_FRAME_MS) {
+      FD.globalTick++;
+      update();
+      testerAccum -= TESTER_FRAME_MS;
+    }
     requestAnimationFrame(render);
   }
 
