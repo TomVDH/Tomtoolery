@@ -568,4 +568,131 @@
       p.type.draw(p.x, bobY, p.r, FD.globalTick);
     });
   };
+  // ── Near-Miss Effect ────────────────────────────────────────
+  // Shared component: call FD.triggerNearMiss(droneX, droneY, clearance)
+  // then FD.updateNearMiss() each frame and FD.drawNearMiss() in render.
+  FD.nearMissAlpha = 0;
+  FD.nearMissText = '';
+  FD.nearMissTimer = 0;
+  FD.nearMissX = 0;
+  FD.nearMissY = 0;
+
+  FD.triggerNearMiss = function (droneX, droneY, clearance) {
+    FD.nearMissText = clearance <= 10 ? 'RAZOR!' : 'CLOSE!';
+    FD.nearMissAlpha = 1;
+    FD.nearMissTimer = 0;
+    FD.nearMissX = droneX;
+    FD.nearMissY = droneY;
+
+    var intensity = 1 - Math.max(0, (clearance - 5) / 35);
+    var count = Math.round(4 + intensity * 4);
+    for (var i = 0; i < count; i++) {
+      FD.particles.push({
+        x: droneX - 10 - i * 6,
+        y: droneY + (Math.random() - 0.5) * 8,
+        vx: -(1.5 + Math.random() * 2),
+        vy: (Math.random() - 0.5) * 0.5,
+        life: 15 + Math.random() * 15, maxLife: 30,
+        r: 1 + Math.random() * 1.5,
+        hue: 190, sat: 100, lum: 70,
+        streak: true
+      });
+    }
+    for (var j = 0; j < 6; j++) {
+      var a = Math.random() * Math.PI * 2;
+      FD.particles.push({
+        x: droneX + Math.cos(a) * 8,
+        y: droneY + Math.sin(a) * 6,
+        vx: Math.cos(a) * (1 + Math.random()),
+        vy: Math.sin(a) * (1 + Math.random()),
+        life: 12 + Math.random() * 10, maxLife: 22,
+        r: 1 + Math.random(), hue: 180, sat: 80, lum: 80,
+        glow: true
+      });
+    }
+  };
+
+  FD.updateNearMiss = function () {
+    if (FD.nearMissAlpha <= 0) return;
+    FD.nearMissTimer++;
+    FD.nearMissAlpha = Math.max(0, 1 - FD.nearMissTimer / 30);
+  };
+
+  FD.drawNearMiss = function () {
+    if (FD.nearMissAlpha <= 0.01) return;
+    var ctx = FD.ctx, W = FD.W, H = FD.H;
+
+    ctx.save();
+    ctx.globalAlpha = FD.nearMissAlpha * 0.9;
+    ctx.font = '700 16px "Segoe UI", system-ui, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#00d4ff';
+    ctx.shadowColor = '#00d4ff'; ctx.shadowBlur = 8;
+    ctx.fillText(FD.nearMissText, FD.nearMissX, FD.nearMissY - 25 - (FD.nearMissTimer * 0.5));
+    ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
+
+    var pulseAlpha = FD.nearMissAlpha * 0.12;
+    var edgeGrad = ctx.createRadialGradient(W / 2, H / 2, W * 0.3, W / 2, H / 2, W * 0.55);
+    edgeGrad.addColorStop(0, 'rgba(0,212,255,0)');
+    edgeGrad.addColorStop(1, 'rgba(0,212,255,' + pulseAlpha + ')');
+    ctx.fillStyle = edgeGrad;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  };
+
+  // ── Speed Indicator ─────────────────────────────────────────
+  // Shared component: call FD.drawSpeedIndicator(speed) in render.
+  // Pre-generated stable streak data.
+  FD.speedStreaks = [];
+  for (var si = 0; si < 80; si++) {
+    FD.speedStreaks.push({
+      y: Math.random() * FD.H,
+      baseLen: 4 + Math.random() * 12,
+      alpha: 0.08 + Math.random() * 0.18,
+      lineW: 0.5 + Math.random() * 1.0,
+      oscSpeed: 1.5 + Math.random() * 3,
+      oscPhase: Math.random() * Math.PI * 2
+    });
+  }
+
+  FD.drawSpeedIndicator = function (speed) {
+    if (speed < 4.0) return;
+    var ctx = FD.ctx, W = FD.W, H = FD.H;
+
+    var intensity = Math.min(1, (speed - 4.0) / 8.0);
+    var bandW = 25 + intensity * 15;
+    var visibleCount = Math.round(6 + intensity * 28);
+
+    var cr, cg, cb;
+    if (speed < 8) {
+      cr = 0; cg = Math.round(180 + intensity * 75); cb = 255;
+    } else {
+      var warm = Math.min(1, (speed - 8) / 4);
+      cr = Math.round(warm * 255); cg = Math.round(180 - warm * 80); cb = Math.round(255 - warm * 200);
+    }
+
+    ctx.save();
+    var tick = FD.globalTick;
+    for (var side = 0; side < 2; side++) {
+      var offset = side * 40;
+      for (var i = 0; i < visibleCount && i < 40; i++) {
+        var s = FD.speedStreaks[offset + i];
+        var oscX = Math.sin(tick * s.oscSpeed * 0.02 + s.oscPhase) * bandW * 0.4;
+        var len = s.baseLen * (0.6 + intensity * 0.8);
+        var x1;
+        if (side === 0) { x1 = oscX + bandW * 0.2; }
+        else { x1 = W - bandW * 0.2 - len + oscX; }
+
+        ctx.strokeStyle = 'rgba(' + cr + ',' + cg + ',' + cb + ',' + (s.alpha * intensity) + ')';
+        ctx.lineWidth = s.lineW;
+        ctx.beginPath();
+        ctx.moveTo(x1, s.y);
+        ctx.lineTo(x1 + len, s.y);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  };
 })();

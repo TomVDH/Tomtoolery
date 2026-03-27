@@ -20,9 +20,8 @@
   let countdownActive = false;
   let countdownStart = 0;
 
-  let youDiedState = 'off'; // off, wait, fadein, hold, fadeout
+  let youDiedActive = false;
   let youDiedTimer = 0;
-  let youDiedAlpha = 0;
 
   let flashAlpha = 0;
 
@@ -40,11 +39,11 @@
 
   // --- Effect triggers ---
   function triggerDeath() {
-    flashAlpha = 0.5;
     FD.screenShake = 8;
     FD.spawnExplosion(drone.x, drone.y);
-    youDiedState = 'wait';
+    youDiedActive = true;
     youDiedTimer = 0;
+    FD.deathText = 'YOU DIED';
   }
 
   function triggerFlash() {
@@ -53,9 +52,9 @@
   }
 
   function triggerYouDied() {
-    youDiedState = 'fadein';
-    youDiedTimer = 0;
-    youDiedAlpha = 0;
+    youDiedActive = true;
+    youDiedTimer = FD.DEATH_FLASH_DUR; // skip flash, go straight to text
+    FD.deathText = 'YOU DIED';
   }
 
   function triggerExplosion() {
@@ -179,83 +178,13 @@
     FD.drawMilestoneText(milestoneText, milestoneColor, phase, W / 2, milestoneY);
   }
 
-  // ── Near-Miss Effect ────────────────────────────────────────
-  let nearMissAlpha = 0;
-  let nearMissText = '';
-  let nearMissTimer = 0;
-
+  // Near-miss — uses shared FD.triggerNearMiss / FD.drawNearMiss
   function triggerNearMiss() {
     var clearance = parseInt(document.getElementById('nearMissGap').value, 10);
-    nearMissText = clearance <= 10 ? 'RAZOR!' : 'CLOSE!';
-    nearMissAlpha = 1;
-    nearMissTimer = 0;
-
-    // Intensity scales with how tight the miss was
-    var intensity = 1 - (clearance - 5) / 35; // 1.0 at 5px, 0.0 at 40px
-
-    // Streak particles trailing behind drone
-    var count = Math.round(4 + intensity * 4);
-    for (var i = 0; i < count; i++) {
-      FD.particles.push({
-        x: drone.x - 10 - i * 6,
-        y: drone.y + (Math.random() - 0.5) * 8,
-        vx: -(1.5 + Math.random() * 2),
-        vy: (Math.random() - 0.5) * 0.5,
-        life: 15 + Math.random() * 15, maxLife: 30,
-        r: 1 + Math.random() * 1.5,
-        hue: 190, sat: 100, lum: 70,
-        streak: true
-      });
-    }
-
-    // Sparkle burst at drone
-    for (var j = 0; j < 6; j++) {
-      var a = Math.random() * Math.PI * 2;
-      FD.particles.push({
-        x: drone.x + Math.cos(a) * 8,
-        y: drone.y + Math.sin(a) * 6,
-        vx: Math.cos(a) * (1 + Math.random()),
-        vy: Math.sin(a) * (1 + Math.random()),
-        life: 12 + Math.random() * 10, maxLife: 22,
-        r: 1 + Math.random(), hue: 180, sat: 80, lum: 80,
-        glow: true
-      });
-    }
+    FD.triggerNearMiss(drone.x, drone.y, clearance);
   }
 
-  function updateNearMiss() {
-    if (nearMissAlpha <= 0) return;
-    nearMissTimer++;
-    nearMissAlpha = Math.max(0, 1 - nearMissTimer / 30);
-  }
-
-  function drawNearMiss() {
-    if (nearMissAlpha <= 0.01) return;
-
-    // Text flash near drone
-    ctx.save();
-    ctx.globalAlpha = nearMissAlpha * 0.9;
-    ctx.font = '700 16px "Segoe UI", system-ui, sans-serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#00d4ff';
-    ctx.shadowColor = '#00d4ff';
-    ctx.shadowBlur = 8;
-    ctx.fillText(nearMissText, drone.x, drone.y - 25 - (nearMissTimer * 0.5));
-    ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
-
-    // Edge pulse — brief cyan vignette
-    var pulseAlpha = nearMissAlpha * 0.12;
-    var edgeGrad = ctx.createRadialGradient(W / 2, H / 2, W * 0.3, W / 2, H / 2, W * 0.55);
-    edgeGrad.addColorStop(0, 'rgba(0,212,255,0)');
-    edgeGrad.addColorStop(1, 'rgba(0,212,255,' + pulseAlpha + ')');
-    ctx.fillStyle = edgeGrad;
-    ctx.fillRect(0, 0, W, H);
-
-    ctx.globalAlpha = 1;
-    ctx.restore();
-  }
-
-  // ── Speed Indicator ─────────────────────────────────────────
+  // Speed indicator — uses shared FD.drawSpeedIndicator
   let speedFxEnabled = false;
   let speedFxValue = 2.8;
 
@@ -269,65 +198,6 @@
     document.getElementById('speedFxLabel').textContent = speedFxValue.toFixed(1);
   }
 
-  // Pre-generate stable streak data (40 streaks per side)
-  // Each streak has a fixed Y and oscillates horizontally
-  var speedStreaks = [];
-  for (var si = 0; si < 80; si++) {
-    speedStreaks.push({
-      y: Math.random() * H,
-      baseLen: 4 + Math.random() * 12,    // short dashes (4-16px)
-      alpha: 0.08 + Math.random() * 0.18,
-      lineW: 0.5 + Math.random() * 1.0,
-      oscSpeed: 1.5 + Math.random() * 3,   // horizontal oscillation rate
-      oscPhase: Math.random() * Math.PI * 2
-    });
-  }
-
-  function drawSpeedIndicator() {
-    if (!speedFxEnabled) return;
-    var speed = speedFxValue;
-    if (speed < 4.0) return;
-
-    var intensity = Math.min(1, (speed - 4.0) / 8.0); // 0 at 4, 1 at 12
-    var bandW = 25 + intensity * 15;                    // 25-40px edge band
-    var visibleCount = Math.round(6 + intensity * 28);  // 6-34 streaks per side
-
-    // Colour: cyan at moderate speed, warm orange at extreme
-    var cr, cg, cb;
-    if (speed < 8) {
-      cr = 0; cg = Math.round(180 + intensity * 75); cb = 255;
-    } else {
-      var warm = Math.min(1, (speed - 8) / 4);
-      cr = Math.round(warm * 255); cg = Math.round(180 - warm * 80); cb = Math.round(255 - warm * 200);
-    }
-
-    ctx.save();
-    var tick = FD.globalTick;
-    for (var side = 0; side < 2; side++) {
-      var offset = side * 40;
-      for (var i = 0; i < visibleCount && i < 40; i++) {
-        var s = speedStreaks[offset + i];
-        // Horizontal oscillation — streaks jitter back and forth at screen edge
-        var oscX = Math.sin(tick * s.oscSpeed * 0.02 + s.oscPhase) * bandW * 0.4;
-        var len = s.baseLen * (0.6 + intensity * 0.8); // longer at higher speed
-
-        var x1;
-        if (side === 0) {
-          x1 = oscX + bandW * 0.2;                      // left edge
-        } else {
-          x1 = W - bandW * 0.2 - len + oscX;            // right edge
-        }
-
-        ctx.strokeStyle = 'rgba(' + cr + ',' + cg + ',' + cb + ',' + (s.alpha * intensity) + ')';
-        ctx.lineWidth = s.lineW;
-        ctx.beginPath();
-        ctx.moveTo(x1, s.y);
-        ctx.lineTo(x1 + len, s.y);
-        ctx.stroke();
-      }
-    }
-    ctx.restore();
-  }
 
   function resetScene() {
     testBuildings = [];
@@ -338,14 +208,14 @@
     FD.particles = [];
     FD.fireworks = [];
     flashAlpha = 0;
-    youDiedAlpha = 0;
-    youDiedState = 'off';
+    youDiedActive = false;
+    youDiedTimer = 0;
     countdownActive = false;
     FD.nukeActive = false;
     FD.pickups = [];
     FD.screenShake = 0;
     milestoneState = 'off'; milestoneTimer = 0;
-    nearMissAlpha = 0;
+    FD.nearMissAlpha = 0;
     speedFxEnabled = false;
     document.getElementById('speedFxBtn').textContent = 'Speed FX: OFF';
   }
@@ -564,6 +434,8 @@
 
   // --- Tester-specific drawing ---
 
+  // ── Tester draw wrappers — all use shared FD.* components ──
+
   function drawFlash() {
     if (flashAlpha > 0.01) {
       ctx.globalAlpha = flashAlpha;
@@ -573,83 +445,19 @@
     }
   }
 
-  function drawYouDied() {
-    if (youDiedAlpha < 0.01) return;
-
-    // Shadow band
-    const bandH = 80, bandY = H / 2 - bandH / 2;
-    const g = ctx.createLinearGradient(0, bandY - 20, 0, bandY + bandH + 20);
-    g.addColorStop(0, 'rgba(0,0,0,0)');
-    g.addColorStop(0.15, `rgba(0,0,0,${youDiedAlpha * 0.6})`);
-    g.addColorStop(0.5, `rgba(0,0,0,${youDiedAlpha * 0.75})`);
-    g.addColorStop(0.85, `rgba(0,0,0,${youDiedAlpha * 0.6})`);
-    g.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, bandY - 20, W, bandH + 40);
-
-    ctx.globalAlpha = youDiedAlpha;
-    ctx.font = '700 48px "Segoe UI", system-ui, sans-serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.shadowColor = '#cc220088'; ctx.shadowBlur = 40;
-    ctx.fillStyle = '#bb2200'; ctx.fillText('YOU DIED', W / 2, H / 2);
-    ctx.shadowBlur = 20; ctx.fillStyle = '#cc2200'; ctx.fillText('YOU DIED', W / 2, H / 2);
-    ctx.shadowBlur = 0; ctx.shadowColor = 'transparent'; ctx.globalAlpha = 1;
-  }
-
   function drawCountdown() {
+    // Uses the exact same FD.drawReadySequence as the game
     if (!countdownActive) return;
-    const elapsed = performance.now() - countdownStart;
-    const t = Math.min(1, elapsed / 4000);
-    const textY = H / 2 - 70;
+    var elapsed = performance.now() - countdownStart;
+    var t = Math.min(1, elapsed / FD.READY_MS);
 
-    // Drone outline blink
-    const blinkHz = 15 - t * t * t * 13;
-    const blinkOn = Math.sin(elapsed * blinkHz * 0.00628) > 0;
-    if (blinkOn || t > 0.9) {
-      ctx.save(); ctx.translate(drone.x, drone.y); ctx.rotate(drone.angle);
-      const a = t > 0.9 ? Math.max(0, 1 - (t - 0.9) / 0.1) : 0.85;
-      ctx.strokeStyle = '#00d4ff'; ctx.lineWidth = 1; ctx.globalAlpha = a;
-      ctx.shadowColor = '#00d4ff'; ctx.shadowBlur = 6;
-      ctx.beginPath();
-      ctx.moveTo(-15, -5); ctx.lineTo(-4, -5); ctx.lineTo(-4, -8);
-      ctx.lineTo(4, -8); ctx.lineTo(4, -5); ctx.lineTo(15, -5);
-      ctx.lineTo(19, -2); ctx.lineTo(19, 3); ctx.lineTo(15, 3);
-      ctx.lineTo(10, 5); ctx.lineTo(10, 9); ctx.lineTo(-10, 9);
-      ctx.lineTo(-10, 5); ctx.lineTo(-15, 3); ctx.lineTo(-19, 3);
-      ctx.lineTo(-19, -2); ctx.closePath(); ctx.stroke();
-      ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
-      ctx.globalAlpha = 1; ctx.restore();
-    }
+    // Wire up FD state so drawReadySequence works
+    FD.readyStartTime = countdownStart;
+    FD.drone = drone;
+    FD.activeDroneType = activeDrone;
 
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    if (t < 0.38) {
-      const phase = t / 0.38;
-      let alpha, ox;
-      if (phase < 0.15) { const p = phase / 0.15; alpha = p * 0.8; ox = (1 - p) * -40; }
-      else if (phase > 0.85) { const p = (phase - 0.85) / 0.15; alpha = (1 - p) * 0.8; ox = p * 40; }
-      else { alpha = 0.8; ox = 0; }
-      ctx.globalAlpha = alpha; ctx.font = '700 22px "Segoe UI", system-ui, sans-serif';
-      ctx.fillStyle = '#667'; ctx.fillText('Ready?', W / 2 + ox, textY);
-    } else if (t < 0.75) {
-      const phase = (t - 0.38) / 0.37;
-      let alpha, ox;
-      if (phase < 0.12) { const p = phase / 0.12; alpha = p * 0.85; ox = (1 - p) * -35; }
-      else if (phase > 0.88) { const p = (phase - 0.88) / 0.12; alpha = (1 - p) * 0.85; ox = p * 35; }
-      else { alpha = 0.85; ox = 0; }
-      ctx.globalAlpha = alpha; ctx.font = '700 22px "Segoe UI", system-ui, sans-serif';
-      ctx.fillStyle = '#778'; ctx.fillText('Set.', W / 2 + ox, textY);
-    } else {
-      const phase = (t - 0.75) / 0.25;
-      const smackT = Math.min(1, phase / 0.15);
-      const scaleOvershoot = smackT < 1 ? 1 + (1 - smackT) * 0.2 : 1;
-      ctx.save(); ctx.translate(W / 2, textY); ctx.scale(scaleOvershoot, scaleOvershoot);
-      ctx.globalAlpha = Math.min(1, smackT * 1.5);
-      ctx.font = '700 36px "Courier New", monospace'; ctx.fillStyle = '#00d4ff';
-      ctx.shadowColor = '#00d4ffaa'; ctx.shadowBlur = 30;
-      ctx.fillText('DRONE!', 0, 0); ctx.shadowBlur = 12; ctx.fillText('DRONE!', 0, 0);
-      ctx.shadowBlur = 0; ctx.shadowColor = 'transparent'; ctx.restore();
-    }
-    ctx.globalAlpha = 1;
+    FD.drawReadySequence(t, 'ready');
+
     if (t >= 1) countdownActive = false;
   }
 
@@ -662,26 +470,18 @@
     flashAlpha *= 0.92;
     if (FD.screenShake > 0.3) FD.screenShake *= 0.85;
 
-    // YOU DIED state machine
-    if (youDiedState === 'wait') {
+    // YOU DIED — uses game's FD.drawDeathSequence via deathTimer
+    if (youDiedActive) {
       youDiedTimer++;
-      if (youDiedTimer > 18) { youDiedState = 'fadein'; youDiedTimer = 0; }
-    } else if (youDiedState === 'fadein') {
-      youDiedTimer++;
-      youDiedAlpha = Math.pow(youDiedTimer / 120, 2);
-      if (youDiedTimer >= 120) { youDiedState = 'hold'; youDiedTimer = 0; youDiedAlpha = 1; }
-    } else if (youDiedState === 'hold') {
-      youDiedTimer++;
-      if (youDiedTimer >= 70) { youDiedState = 'fadeout'; youDiedTimer = 0; }
-    } else if (youDiedState === 'fadeout') {
-      youDiedTimer++;
-      youDiedAlpha = 1 - youDiedTimer / 60;
-      if (youDiedTimer >= 60) { youDiedState = 'off'; youDiedAlpha = 0; }
+      if (youDiedTimer > FD.DIED_TOTAL + FD.SCORE_DELAY) {
+        youDiedActive = false;
+        youDiedTimer = 0;
+      }
     }
 
     updatePipeScroll();
     updateMilestone();
-    updateNearMiss();
+    FD.updateNearMiss();
     FD.updateParticles();
     FD.updateFireworks();
   }
@@ -737,11 +537,11 @@
     FD.drawVignette();
     drawCountdown();
     drawFlash();
-    drawYouDied();
+    FD.drawDeathSequence(youDiedActive ? 'dying' : 'menu', youDiedTimer);
     FD.drawNukeOverlay();
-    drawSpeedIndicator();
+    if (speedFxEnabled) FD.drawSpeedIndicator(speedFxValue);
     drawMilestone();
-    drawNearMiss();
+    FD.drawNearMiss();
     drawPipeHUD();
     drawHitboxes();
 
