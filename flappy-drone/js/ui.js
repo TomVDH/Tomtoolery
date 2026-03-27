@@ -121,18 +121,21 @@
       ctx.fillStyle = glowGrad;
       ctx.beginPath(); ctx.arc(0, 0, 28, 0, Math.PI * 2); ctx.fill();
 
-      // Draw the drone's silhouette as a cyan stroke outline
-      ctx.strokeStyle = '#00d4ff';
-      ctx.lineWidth = 1;
-      ctx.globalAlpha = outlineAlpha;
+      // Draw the drone's silhouette as a cyan glow outline
+      // silhouetteParts use fillRect (immediate draws), so we set
+      // fillStyle to the outline colour and let them draw directly.
+      ctx.globalAlpha = outlineAlpha * 0.35;
+      ctx.fillStyle = '#00d4ff';
       ctx.shadowColor = '#00d4ff';
-      ctx.shadowBlur = 6;
-      ctx.fillStyle = 'rgba(0, 212, 255, 0.03)';
+      ctx.shadowBlur = 8;
       if (FD.silhouetteParts[droneType]) {
-        ctx.beginPath();
         FD.silhouetteParts[droneType]();
-        ctx.stroke();
-        ctx.fill();
+      }
+      // Second pass — brighter core for definition
+      ctx.shadowBlur = 3;
+      ctx.globalAlpha = outlineAlpha * 0.6;
+      if (FD.silhouetteParts[droneType]) {
+        FD.silhouetteParts[droneType]();
       }
 
       ctx.shadowBlur = 0;
