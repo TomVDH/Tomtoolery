@@ -344,14 +344,27 @@ function frame(now) {
   }
 
   // === Particles ===
-  // Spawn embers
-  if (nukeActive && elapsed > 600 && elapsed < 4000 && embers.length < 60) {
+  // Spawn embers from under the base ring of the mushroom cap
+  if (nukeActive && elapsed > 600 && elapsed < 6000 && embers.length < 80) {
+    // Recalculate cloud position for spawn point
+    const eCloudT = Math.min(1, (elapsed-100)/3000);
+    const eRiseEase = 1 - Math.pow(1-Math.min(1, eCloudT*1.5), 3);
+    const eDrift = Math.min(1, elapsed/TOTAL_MS)*H*0.06;
+    const eCenterY = GY - eRiseEase*(H*0.42) - eDrift;
+    const eCapGrow = Math.min(1, eCloudT*2);
+    const eCapR = 50 + eCapGrow*80;
+    const eCapRx = eCapR * 1.6;
+    // Base ring Y and width
+    const eBaseRingY = eCenterY + eCapR * 0.55;
+    const eBaseRingW = eCapRx * 1.2;
     for (let i = 0; i < 2; i++) {
+      const spawnX = GX + (Math.random()-0.5)*2 * eBaseRingW;
       embers.push({
-        x: GX + (Math.random()-0.5)*80, y: GY-30-Math.random()*60,
-        vx: (Math.random()-0.5)*4, vy: -2-Math.random()*5,
-        life: 60+Math.random()*80, maxLife: 140,
-        r: 1+Math.random()*2.5, hue: 15+Math.random()*30
+        x: spawnX, y: eBaseRingY + Math.random()*8,
+        vx: (Math.random()-0.5)*0.8,
+        vy: 0.3 + Math.random()*0.6,        // gentle downward drift
+        life: 120+Math.random()*180, maxLife: 300,
+        r: 1+Math.random()*2, hue: 15+Math.random()*30
       });
     }
   }
@@ -378,16 +391,20 @@ function frame(now) {
       ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x-p.vx*2, p.y-p.vy*2); ctx.stroke();
     }
   });
-  // Draw & update embers
+  // Draw & update embers — gentle drift down with wind sway
   embers.forEach(p => {
-    p.x += p.vx; p.y += p.vy; p.vy += 0.04; p.life--;
+    p.x += p.vx + Math.sin(p.life * 0.02 + p.x * 0.01) * 0.15; // gentle sway
+    p.y += p.vy;
+    // No gravity — they just drift at spawn speed
+    p.life--;
     if (p.life > 0) {
-      const a = p.life/p.maxLife;
-      ctx.globalAlpha = a;
-      ctx.fillStyle = `hsl(${p.hue},100%,60%)`;
+      const a = (p.life/p.maxLife);
+      const fadeA = a * 0.8; // slightly transparent overall
+      ctx.globalAlpha = fadeA;
+      ctx.fillStyle = `hsl(${p.hue},100%,${50 + a*20}%)`;
       ctx.shadowColor = `hsl(${p.hue},100%,50%)`;
-      ctx.shadowBlur = 4;
-      ctx.beginPath(); ctx.arc(p.x, p.y, p.r*a, 0, Math.PI*2); ctx.fill();
+      ctx.shadowBlur = 6;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r * (0.5 + a*0.5), 0, Math.PI*2); ctx.fill();
       ctx.shadowBlur = 0;
     }
   });
