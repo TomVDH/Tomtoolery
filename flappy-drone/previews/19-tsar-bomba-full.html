@@ -142,15 +142,16 @@ function frame(now) {
   if (nukeActive) {
     let shakeAmp = 0;
     if (elapsed < 3000) {
-      shakeAmp = 25 * (1 - elapsed / 3000);
+      shakeAmp = 12 * (1 - elapsed / 3000);
     }
     // Shockwave hit burst at ~1800ms
     if (elapsed > 1500 && elapsed < 2200) {
       const st = (elapsed - 1500) / 700;
-      shakeAmp += 15 * (1 - st);
+      shakeAmp += 8 * (1 - st);
     }
-    shakeX = (Math.random() - 0.5) * 2 * shakeAmp;
-    shakeY = (Math.random() - 0.5) * 2 * shakeAmp;
+    // Clamp to prevent canvas content going off-edge
+    shakeX = Math.max(-10, Math.min(10, (Math.random() - 0.5) * 2 * shakeAmp));
+    shakeY = Math.max(-10, Math.min(10, (Math.random() - 0.5) * 2 * shakeAmp));
   }
 
   ctx.save();

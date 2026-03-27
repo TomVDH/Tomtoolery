@@ -42,6 +42,25 @@
   let lastFrameTime = performance.now();
   let updateAccum = 0;
 
+  // --- Game modes ---
+  const gameModes = ['classic', 'rush'];
+  const modeNames = { classic: 'CLASSIC', rush: 'ZENA RUSH' };
+  const modeDescs = { classic: 'Endless flight', rush: 'Beat the clock — 5 gaps = bonus time' };
+  let modeIndex = 0;
+  let activeMode = 'classic';
+
+  // --- Zena Rush timer ---
+  const RUSH_START_TIME = 20;    // seconds to start
+  const RUSH_BONUS_TIME = 8;     // seconds added per 5 gaps
+  const RUSH_BONUS_EVERY = 5;    // gates per bonus
+  let rushTimer = 0;             // seconds remaining
+  let rushLastBonus = 0;         // last score that triggered bonus
+  let rushBonusFlash = 0;        // flash timer for bonus UI feedback
+  const hudTimerEl = document.getElementById('hudTimer');
+
+  // --- Secret win ---
+  const WIN_SCORE = 65;
+
   // --- Neon sign data for pipe buildings ---
   const roofTexts  = ['IQ NANO', 'ZD1000', 'PP-1', 'IQ SQUARE', 'ZenaGames', 'ZENATECH', 'DRONE CO', 'SKYNET', 'HOVER', 'APEX', 'VOLT', 'NIMBUS'];
 
@@ -55,6 +74,18 @@
     frame = 0;
     deathTimer = 0;
     hudEl.textContent = '0';
+
+    // Zena Rush timer
+    rushTimer = RUSH_START_TIME;
+    rushLastBonus = 0;
+    rushBonusFlash = 0;
+    if (activeMode === 'rush') {
+      hudTimerEl.style.display = 'block';
+      hudTimerEl.textContent = rushTimer.toFixed(1);
+      hudTimerEl.classList.remove('critical');
+    } else {
+      hudTimerEl.style.display = 'none';
+    }
 
     // Expose canvas + ctx to shared modules
     FD.ctx    = ctx;
@@ -72,6 +103,7 @@
     if (state === 'menu') {
       FD.hideScreen(menuScreen);
       init();
+      trackEvent('game_start', { drone: activeDroneType, mode: activeMode });
       // Delay ready state until menu fade completes
       state = 'fading';
       fadeStartTime = performance.now();
@@ -138,6 +170,36 @@
   if (rightArrow) rightArrow.addEventListener('click', function (e) {
     e.stopPropagation();
     if (state === 'menu') cycleDrone(1);
+  });
+
+  // --- Mode cycle ---
+  function cycleMode(dir) {
+    modeIndex = (modeIndex + dir + gameModes.length) % gameModes.length;
+    activeMode = gameModes[modeIndex];
+    var label = document.getElementById('modeLabel');
+    var desc = document.getElementById('modeDesc');
+    if (label) label.textContent = modeNames[activeMode];
+    if (desc) desc.textContent = modeDescs[activeMode];
+  }
+  var modeLabel = document.getElementById('modeLabel');
+  if (modeLabel) modeLabel.addEventListener('click', function (e) {
+    e.stopPropagation();
+    if (state === 'menu') cycleMode(1);
+  });
+  var modeLeft = document.getElementById('modeLeft');
+  var modeRight = document.getElementById('modeRight');
+  if (modeLeft) modeLeft.addEventListener('click', function (e) {
+    e.stopPropagation();
+    if (state === 'menu') cycleMode(-1);
+  });
+  if (modeRight) modeRight.addEventListener('click', function (e) {
+    e.stopPropagation();
+    if (state === 'menu') cycleMode(1);
+  });
+  // Up/Down arrows cycle mode on menu (won't conflict since flap only uses Space on menu)
+  document.addEventListener('keydown', function (e) {
+    if (state !== 'menu') return;
+    if (e.code === 'ArrowDown') { e.preventDefault(); cycleMode(1); }
   });
 
   // --- Version hash click -> nuke easter egg (5 rapid clicks on menu) ---
@@ -231,6 +293,39 @@
     FD.screenShake = 8;
     FD.spawnExplosion(drone.x, drone.y);
     hudEl.classList.remove('show');
+    hudTimerEl.style.display = 'none';
+    trackEvent('game_over', { score: score, best: best, drone: activeDroneType, mode: activeMode });
+  }
+
+  // --- Nuke death (Zena Rush timeout) ---
+  function nukeAndDie() {
+    state = 'nuking';
+    best = Math.max(best, score);
+    FD.nukeActive = true;
+    FD.nukeStart = performance.now();
+    FD.screenShake = 12;
+    hudEl.classList.remove('show');
+    hudTimerEl.style.display = 'none';
+    trackEvent('rush_timeout', { score: score, drone: activeDroneType });
+    // After 8s nuke plays, drone crashes
+    setTimeout(function () {
+      if (state === 'nuking') {
+        drone.vy = 8;
+        state = 'nukeFall';
+      }
+    }, 8000);
+  }
+
+  // --- Secret win ---
+  function win() {
+    state = 'dying';
+    best = Math.max(best, score);
+    deathTimer = 0;
+    FD.deathText = 'YOU WIN';
+    FD.screenShake = 0;
+    hudEl.classList.remove('show');
+    hudTimerEl.style.display = 'none';
+    trackEvent('game_win', { score: score, drone: activeDroneType, mode: activeMode });
   }
 
   // ---------------------------------------------------------------
@@ -364,6 +459,33 @@
         pipes[i].scored = true;
         score++;
         hudEl.textContent = score;
+
+        // Zena Rush: bonus time every 5 gates
+        if (activeMode === 'rush' && score > 0 && score % RUSH_BONUS_EVERY === 0) {
+          rushTimer += RUSH_BONUS_TIME;
+          rushBonusFlash = 60; // 1 second of flash
+        }
+
+        // Secret win at score 65
+        if (score >= WIN_SCORE) {
+          win();
+          return;
+        }
+      }
+    }
+
+    // Zena Rush: tick timer down
+    if (activeMode === 'rush' && state === 'play') {
+      rushTimer -= FRAME_MS / 1000;
+      if (rushBonusFlash > 0) rushBonusFlash--;
+      // Update timer HUD
+      hudTimerEl.textContent = (rushBonusFlash > 0 ? '+' + RUSH_BONUS_TIME + 's  ' : '') + Math.max(0, rushTimer).toFixed(1);
+      hudTimerEl.classList.toggle('critical', rushTimer < 5);
+      // Time's up — nuke death
+      if (rushTimer <= 0) {
+        rushTimer = 0;
+        nukeAndDie();
+        return;
       }
     }
 

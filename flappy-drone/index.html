@@ -5,12 +5,25 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Flappy Drone</title>
 <link rel="stylesheet" href="css/game.css">
+<!-- Google Analytics 4 — replace G-XXXXXXXXXX with your Measurement ID -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-XXXXXXXXXX');
+  // Analytics helper — call from game.js
+  window.trackEvent = function(name, params) {
+    if (typeof gtag === 'function') gtag('event', name, params || {});
+  };
+</script>
 </head>
 <body>
 <div id="wrap">
   <canvas id="game" width="620" height="640"></canvas>
   <div class="version">version: 8b46274</div>
   <div class="hud" id="hud">0</div>
+  <div class="hud-timer" id="hudTimer" style="display:none">30.0</div>
 
   <div class="screen show" id="menuScreen">
     <div class="title" id="gameTitle">FLAPPY DRONE</div>
@@ -30,6 +43,12 @@
         document.getElementById('gameSlogan').textContent = pick.slogan;
       })();
     </script>
+    <div class="mode-picker">
+      <span class="mode-arrow" id="modeLeft">◀</span>
+      <span class="mode-label" id="modeLabel">CLASSIC</span>
+      <span class="mode-arrow" id="modeRight">▶</span>
+    </div>
+    <div class="mode-desc" id="modeDesc">Endless flight</div>
     <div class="drone-picker">
       <span class="drone-arrow" id="droneLeft">◀</span>
       <span class="drone-label" id="droneLabel">PIXEL QUAD</span>
