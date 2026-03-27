@@ -438,21 +438,13 @@ function triggerNuke() {
   }, 600);
 }
 
-function drawNuke() {
+// Nuke cloud (behind city) + overlay (on top) split into two draw calls
+function drawNukeCloud() {
   if (!nukeActive) return;
   const elapsed = performance.now() - nukeStart;
   const totalMs = 6000;
   const t = Math.min(1, elapsed / totalMs);
   const gx = nukeGx, gy = nukeGy;
-
-  // --- Phase 1: Blinding white flash (0-300ms) ---
-  if (elapsed < 300) {
-    const ft = elapsed / 300;
-    ctx.globalAlpha = (1 - ft * ft) * 0.95;
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, W, H);
-    ctx.globalAlpha = 1;
-  }
 
   // --- Shockwave ring (200ms - 2000ms) ---
   if (elapsed > 200 && elapsed < 2000) {
@@ -556,7 +548,31 @@ function drawNuke() {
     }
   }
 
-  // --- Orange/red ambient light wash ---
+  // Shake (runs in cloud pass)
+  if (elapsed < 800) {
+    screenShake = 20 * (1 - elapsed / 800);
+  } else if (elapsed < 3000) {
+    screenShake = Math.max(screenShake * 0.96, 0);
+  }
+
+  if (elapsed > totalMs) nukeActive = false;
+}
+
+// Nuke overlay: flash + light wash (drawn on top of everything)
+function drawNukeOverlay() {
+  if (!nukeActive) return;
+  const elapsed = performance.now() - nukeStart;
+
+  // Blinding white flash (0-300ms)
+  if (elapsed < 300) {
+    const ft = elapsed / 300;
+    ctx.globalAlpha = (1 - ft * ft) * 0.95;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = 1;
+  }
+
+  // Orange/red ambient light wash
   if (elapsed < 2000) {
     const lt = elapsed / 2000;
     ctx.globalAlpha = (1 - lt) * 0.35;
@@ -570,15 +586,6 @@ function drawNuke() {
     ctx.fillRect(0, 0, W, H);
     ctx.globalAlpha = 1;
   }
-
-  // Shake
-  if (elapsed < 800) {
-    screenShake = 20 * (1 - elapsed / 800);
-  } else if (elapsed < 3000) {
-    screenShake = Math.max(screenShake * 0.96, 0);
-  }
-
-  if (elapsed > totalMs) nukeActive = false;
 }
 
 function toggleMotion() {
@@ -767,6 +774,7 @@ function render() {
   drawSky();
   drawMoon();
   drawStars();
+  drawNukeCloud();
   drawFarCity();
   drawGround();
 
@@ -778,7 +786,7 @@ function render() {
   drawCountdown();
   drawFlash();
   drawYouDied();
-  drawNuke();
+  drawNukeOverlay();
 
   ctx.restore();
 
