@@ -21,13 +21,22 @@
         hue: 15 + Math.random() * 25, sat: 100, lum: 55 + Math.random() * 20
       });
     }
-    // Bright blue spark flash — instant pop of cyan light
+    // Bright blue spark flash — big visible cyan pop
     FD.particles.push({
-      x: droneX, y: droneY + 6,
-      vx: 0, vy: 0.5,
-      life: 3, maxLife: 3,
-      r: 14,
-      hue: 200, sat: 100, lum: 92,
+      x: droneX, y: droneY + 4,
+      vx: 0, vy: 0.3,
+      life: 8, maxLife: 8,
+      r: 30,
+      hue: 200, sat: 100, lum: 95,
+      glow: true
+    });
+    // Inner white-blue core
+    FD.particles.push({
+      x: droneX, y: droneY + 4,
+      vx: 0, vy: 0.2,
+      life: 5, maxLife: 5,
+      r: 12,
+      hue: 210, sat: 80, lum: 98,
       glow: true
     });
     // Tiny white-hot glow
