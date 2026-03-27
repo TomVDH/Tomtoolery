@@ -21,6 +21,7 @@
   let score = 0, best = 0;
   let drone = { x: 100, y: H / 2, vy: 0, angle: 0, propPhase: 0 };
   let pipes = [];
+  let curSpeed = 0;
   let frame = 0;
   let deathTimer = 0;
   let readyStartTime = 0;
@@ -413,7 +414,7 @@
     drone.propPhase += 0.5;
 
     // --- Difficulty ramp ---
-    var curSpeed, curGap, curInterval;
+    var curGap, curInterval;
 
     if (activeMode === 'rush') {
       // ZENA RUSH: starts fast, ramps brutally
