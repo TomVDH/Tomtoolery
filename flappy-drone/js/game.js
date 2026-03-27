@@ -561,6 +561,46 @@
     var scrollOffset = (FD.globalTick * FD.PIPE_SPEED) % 24;
     FD.drawGround(scrollOffset);
 
+    // Gap danger markers — show on right edge when gaps are offscreen and speed is high
+    if (curSpeed > 3.5) {
+      for (var gi = 0; gi < pipes.length; gi += 2) {
+        var gp = pipes[gi];
+        if (!gp) continue;
+        // Only show for pipes that are offscreen to the right
+        if (gp.x > W && gp.x < W + 300) {
+          var gapTopY = gp.h; // bottom of top pipe = top of gap
+          var gapBotY = pipes[gi+1] ? pipes[gi+1].y : gapTopY + 140;
+          var gapCenterY = (gapTopY + gapBotY) / 2;
+          // Fade based on distance: closer = more opaque
+          var distFade = 1 - Math.min(1, (gp.x - W) / 300);
+          var pulse = 0.6 + 0.4 * Math.sin(FD.globalTick * 0.12);
+          var markerAlpha = distFade * pulse * 0.7;
+          // Draw chevron marker at right edge
+          ctx.save();
+          ctx.globalAlpha = markerAlpha;
+          // Gap zone indicator — two small triangles pointing left
+          var mx = W - 8;
+          ctx.fillStyle = '#ff8800';
+          ctx.beginPath();
+          ctx.moveTo(mx + 6, gapCenterY - 6);
+          ctx.lineTo(mx, gapCenterY);
+          ctx.lineTo(mx + 6, gapCenterY + 6);
+          ctx.closePath();
+          ctx.fill();
+          // Thin line showing gap extent
+          ctx.strokeStyle = '#ff880066';
+          ctx.lineWidth = 1;
+          ctx.setLineDash([3, 3]);
+          ctx.beginPath();
+          ctx.moveTo(mx - 2, gapTopY);
+          ctx.lineTo(mx - 2, gapBotY);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.restore();
+        }
+      }
+    }
+
     // Pipes as buildings
     pipes.forEach(function (p) {
       var seed = ((p.id * 2654435761) >>> 0);
