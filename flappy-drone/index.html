@@ -27,7 +27,7 @@
   .screen {
     position: absolute; inset: 0;
     display: flex; flex-direction: column; justify-content: center; align-items: center;
-    pointer-events: none; transition: opacity 0.4s ease;
+    pointer-events: none; transition: opacity 0.8s ease;
     opacity: 0; visibility: hidden;
   }
   .screen.show { opacity: 1; visibility: visible; }
@@ -215,11 +215,15 @@ function hideScreen(el) { el.classList.remove('show'); }
 // --- Input ---
 function flap() {
   if (state === 'menu') {
-    state = 'ready';
-    readyStartTime = performance.now();
-    readyT = 0;
     hideScreen(menuScreen);
     init();
+    // Delay ready state until menu fade completes
+    state = 'fading';
+    setTimeout(() => {
+      state = 'ready';
+      readyStartTime = performance.now();
+      readyT = 0;
+    }, 800);
     return;
   }
   if (state === 'play') {
@@ -916,8 +920,8 @@ function render() {
 
   ctx.restore();
 
-  // Menu idle drone
-  if (state === 'menu') {
+  // Menu / fading idle drone
+  if (state === 'menu' || state === 'fading') {
     drone.propPhase += 0.5;
     drone.y = H / 2 + Math.sin(globalTick * 0.025) * 14;
     drone.angle = Math.sin(globalTick * 0.018) * 0.04;
