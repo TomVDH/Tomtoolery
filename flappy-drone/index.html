@@ -20,7 +20,10 @@
         var titles = [
           { name: 'FLAPPY DRONE', slogan: "Building the drone as we're flying it" },
           { name: 'ROTORHEAD', slogan: 'fly. crash. repeat.' },
-          { name: 'SKY RAT', slogan: 'the city is your obstacle course' }
+          { name: 'SKY RAT', slogan: 'the city is your obstacle course' },
+          { name: 'PROP DROP', slogan: "don't look down" },
+          { name: 'HOVER BOTHER', slogan: 'an irritating flying game' },
+          { name: 'BUZZED', slogan: 'a drone thing' }
         ];
         var pick = titles[Math.floor(Math.random() * titles.length)];
         document.getElementById('gameTitle').textContent = pick.name;
@@ -32,7 +35,6 @@
       <span class="drone-label" id="droneLabel">PIXEL QUAD</span>
       <span class="drone-arrow" id="droneRight">▶</span>
     </div>
-    <div class="copyright">ZenaSoft (c) 1984 -- All Rights Reserved.</div>
     <div class="prompt">Tap or press Space</div>
   </div>
 
@@ -43,6 +45,7 @@
     <div class="score-prompt">Tap to retry</div>
   </div>
 </div>
+<div class="copyright">ZenaSoft (c) 1984 -- All Rights Reserved.</div>
 
 <script src="js/config.js"></script>
 <script src="js/background.js"></script>
