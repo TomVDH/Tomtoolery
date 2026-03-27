@@ -350,11 +350,15 @@ function triggerExplosion() {
 }
 
 function triggerThrust() {
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 6; i++) {
     particles.push({
-      x: drone.x, y: drone.y + 10,
-      vx: (Math.random() - 0.5) * 1, vy: Math.random() * 2 + 0.5,
-      life: 16, maxLife: 16, r: Math.random() * 1.8 + 0.8, hue: 195 + Math.random() * 15
+      x: drone.x + (Math.random() - 0.5) * 8,
+      y: drone.y + 8 + Math.random() * 4,
+      vx: (Math.random() - 0.5) * 1.2,
+      vy: Math.random() * 2.5 + 0.5,
+      life: 14 + Math.random() * 8, maxLife: 22,
+      r: Math.random() * 2 + 0.6,
+      hue: 190 + Math.random() * 25, sat: 100, lum: 60 + Math.random() * 15
     });
   }
 }
