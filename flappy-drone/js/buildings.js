@@ -69,12 +69,13 @@
     }
 
     // Nuke rim light on skyline — 5s total (ramp 0.5s, hold 3s, fade 1.5s)
+    // Back layer (furthest) gets the full highlight; front layer only a faint edge.
     var rim = nukeRimCalc(3500, 1500);
     if (rim) {
       ctx.save();
-      applyRimStyle(ctx, rim);
 
-      // Back layer rim (0.6x scroll)
+      // Back layer rim — full intensity (furthest buildings catch the most light)
+      applyRimStyle(ctx, rim);
       ctx.beginPath();
       for (var tileOff3 = -FAR_TILE_W; tileOff3 < W + FAR_TILE_W; tileOff3 += FAR_TILE_W) {
         backBuildings.forEach(function (b) {
@@ -89,7 +90,11 @@
       }
       ctx.stroke();
 
-      // Front layer rim (1.0x scroll)
+      // Front layer rim — faint (closest buildings are silhouetted, only catch a hint)
+      ctx.strokeStyle = `hsla(${rim.rimHue}, ${rim.rimSat}%, ${rim.rimLum}%, ${rim.rimAlpha * 0.15})`;
+      ctx.shadowColor = `hsla(${rim.rimHue}, ${rim.rimSat}%, ${rim.rimLum + 5}%, ${rim.rimAlpha * 0.12})`;
+      ctx.shadowBlur = 3;
+      ctx.lineWidth = 0.5;
       ctx.beginPath();
       for (var tileOff4 = -FAR_TILE_W; tileOff4 < W + FAR_TILE_W; tileOff4 += FAR_TILE_W) {
         frontBuildings.forEach(function (b) {
