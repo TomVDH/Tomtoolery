@@ -420,9 +420,9 @@
       var rushBuildT = Math.min(1, score / 20);
       curGap = FD.GAP_SIZE - rushBuildT * 55;             // 170 → 115
       curInterval = Math.round(FD.PIPE_INTERVAL - rushBuildT * 50); // 160 → 110
-      // Speed: starts at 3.2 (already fast), ramps to 4.5
+      // Speed: starts at 9.45 (450% of Classic 2.1), ramps to 12
       var rushSpeedT = Math.min(1, score / 30);
-      curSpeed = 3.2 + rushSpeedT * 1.3;                  // 3.2 → 4.5
+      curSpeed = 9.45 + rushSpeedT * 2.55;                // 9.45 → 12
     } else {
       // CLASSIC: phased ramp
       // Phase 1 (score 0-7): easy cruising
