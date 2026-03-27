@@ -561,13 +561,15 @@
     var scrollOffset = (FD.globalTick * FD.PIPE_SPEED) % 24;
     FD.drawGround(scrollOffset);
 
-    // Gap danger markers — show on right edge when gaps are offscreen and speed is high
+    // Gap danger marker — show ONLY the next incoming gap on right edge when speed is high
     if (curSpeed > 3.5) {
-      for (var gi = 0; gi < pipes.length; gi += 2) {
+      var markerShown = false;
+      for (var gi = 0; gi < pipes.length && !markerShown; gi += 2) {
         var gp = pipes[gi];
         if (!gp) continue;
-        // Only show for pipes that are offscreen to the right
+        // Only the first pipe pair offscreen to the right
         if (gp.x > W && gp.x < W + 300) {
+          markerShown = true;
           var gapTopY = gp.h; // bottom of top pipe = top of gap
           var gapBotY = pipes[gi+1] ? pipes[gi+1].y : gapTopY + 140;
           var gapCenterY = (gapTopY + gapBotY) / 2;
