@@ -155,6 +155,9 @@ function frame(now) {
 
       const hShift = darkT * 18;
       const lDrop = darkT * 35;
+      // Delayed darkening for outer cap layers (1.5s later)
+      const outerDarkT = elapsed > 3500 ? Math.min(1, (elapsed-3500)/2500) : 0;
+      const outerHS = outerDarkT * 18, outerLD = outerDarkT * 35;
 
       // === Ground debris cloud ===
       const debrisR = stemBaseW * 1.8 * capGrow;
@@ -232,23 +235,23 @@ function frame(now) {
       ctx.fillStyle = gg;
       ctx.beginPath(); ctx.arc(GX, cloudCenterY, glowR, 0, Math.PI*2); ctx.fill();
 
-      // === Cap layers (5 layers for Tsar Bomba) ===
-      // Outermost — dark
-      ctx.fillStyle = `hsla(${10-hShift},55%,${Math.max(4,18-lDrop)}%,${alpha})`;
+      // === Cap layers (5 layers) — brighter starts, delayed outer darkening ===
+      // Outermost — delayed darkening, starts brighter
+      ctx.fillStyle = `hsla(${12-outerHS},60%,${Math.max(5,28-outerLD)}%,${alpha})`;
       ctx.beginPath(); ctx.ellipse(GX, cloudCenterY, capRx*1.15, capR*1.0, 0, 0, Math.PI*2); ctx.fill();
-      // Layer 2
-      ctx.fillStyle = `hsla(${14-hShift},65%,${Math.max(6,25-lDrop)}%,${alpha})`;
+      // Layer 2 — also delayed
+      ctx.fillStyle = `hsla(${16-outerHS},70%,${Math.max(8,35-outerLD)}%,${alpha})`;
       ctx.beginPath(); ctx.ellipse(GX, cloudCenterY-capR*0.03, capRx*0.95, capR*0.85, 0, 0, Math.PI*2); ctx.fill();
-      // Layer 3
-      ctx.fillStyle = `hsla(${20-hShift},80%,${Math.max(8,34-lDrop)}%,${alpha})`;
+      // Layer 3 — brighter start
+      ctx.fillStyle = `hsla(${22-hShift},85%,${Math.max(10,44-lDrop)}%,${alpha})`;
       ctx.beginPath(); ctx.ellipse(GX, cloudCenterY-capR*0.06, capRx*0.75, capR*0.7, 0, 0, Math.PI*2); ctx.fill();
-      // Layer 4 — bright inner
-      ctx.fillStyle = `hsla(${28-hShift},95%,${Math.max(12,46-lDrop)}%,${alpha})`;
+      // Layer 4 — bright inner, boosted
+      ctx.fillStyle = `hsla(${30-hShift},100%,${Math.max(15,55-lDrop)}%,${alpha})`;
       ctx.beginPath(); ctx.ellipse(GX, cloudCenterY-capR*0.08, capRx*0.52, capR*0.52, 0, 0, Math.PI*2); ctx.fill();
-      // Layer 5 — hot core (delayed darkening)
-      const coreDarkDelay = elapsed > 5500 ? Math.min(1, (elapsed-5500)/2500) : 0;
+      // Layer 5 — hot core (heavily delayed darkening)
+      const coreDarkDelay = elapsed > 6000 ? Math.min(1, (elapsed-6000)/2500) : 0;
       const coreAlpha = alpha * Math.max(0.1, 1 - coreDarkDelay);
-      ctx.fillStyle = `hsla(40,100%,${Math.max(20,70-lDrop*2)}%,${coreAlpha})`;
+      ctx.fillStyle = `hsla(40,100%,${Math.max(22,75-lDrop*1.5)}%,${coreAlpha})`;
       ctx.beginPath(); ctx.ellipse(GX, cloudCenterY-capR*0.1, capRx*0.3, capR*0.3, 0, 0, Math.PI*2); ctx.fill();
 
       // === Double fireball — white-hot inner core (Tsar Bomba signature) ===
@@ -267,6 +270,23 @@ function frame(now) {
       // === Base ring / skirt ===
       ctx.fillStyle = `hsla(${15-hShift},70%,${Math.max(5,28-lDrop)}%,${alpha*0.7})`;
       ctx.beginPath(); ctx.ellipse(GX, cloudCenterY+capR*0.55, capRx*1.2, capR*0.22, 0, 0, Math.PI*2); ctx.fill();
+
+      // === Rolling side clouds — billow from under cap ===
+      if (capGrow > 0.2) {
+        const rollT = Math.min(1, (capGrow-0.2)/0.8);
+        const rollR = capR * 0.35 * rollT;
+        const baseRingY = cloudCenterY + capR * 0.55;
+        const rollSpread = capRx * 0.7 * rollT;
+        const rollDH = hShift, rollDL = lDrop * 0.7;
+        for (let side = -1; side <= 1; side += 2) {
+          const rx = GX + side * rollSpread;
+          const ry = baseRingY + rollR * 0.3;
+          ctx.fillStyle = `hsla(${18-rollDH},70%,${Math.max(6,26-rollDL)}%,${alpha*0.6})`;
+          ctx.beginPath(); ctx.ellipse(rx, ry, rollR*1.2, rollR*0.8, 0, 0, Math.PI*2); ctx.fill();
+          ctx.fillStyle = `hsla(${24-rollDH},85%,${Math.max(10,36-rollDL)}%,${alpha*0.5})`;
+          ctx.beginPath(); ctx.ellipse(rx, ry-rollR*0.1, rollR*0.7, rollR*0.5, 0, 0, Math.PI*2); ctx.fill();
+        }
+      }
 
       // === Concentric cloud bands (6 for Tsar Bomba) ===
       const bandNow = elapsed / 1000;

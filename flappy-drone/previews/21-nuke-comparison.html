@@ -209,6 +209,9 @@ function drawTsar(now){
       const capR=35+cg*60, capRx=capR*1.7;
       const stW=16+cg*14, sbW=30+cg*35;
       const hS=dT*18, lD=dT*35;
+      // Delayed darkening for outer cap (1.5s later)
+      const outerDT=el>3500?Math.min(1,(el-3500)/2500):0;
+      const outerHS=outerDT*18, outerLD=outerDT*35;
 
       // Ground debris
       const debR=sbW*1.8*cg, debA=alpha*Math.max(0,1-dT*0.5);
@@ -236,14 +239,14 @@ function drawTsar(now){
       // Cap glow — warm halo matching classic's intensity
       const glR=capRx*3, gg=ctx.createRadialGradient(gx,cy,capR*0.15,gx,cy,glR); gg.addColorStop(0,`hsla(32,100%,${Math.max(18,65-lD*2)}%,${alpha*0.5})`); gg.addColorStop(0.3,`hsla(26,100%,${Math.max(12,50-lD*2)}%,${alpha*0.25})`); gg.addColorStop(0.6,`hsla(20,100%,${Math.max(8,35-lD*2)}%,${alpha*0.08})`); gg.addColorStop(1,'hsla(15,100%,25%,0)'); ctx.fillStyle=gg; ctx.beginPath(); ctx.arc(gx,cy,glR,0,Math.PI*2); ctx.fill();
 
-      // 5 cap layers
-      ctx.fillStyle=`hsla(${10-hS},55%,${Math.max(4,18-lD)}%,${alpha})`; ctx.beginPath(); ctx.ellipse(gx,cy,capRx*1.15,capR*1.0,0,0,Math.PI*2); ctx.fill();
-      ctx.fillStyle=`hsla(${14-hS},65%,${Math.max(6,25-lD)}%,${alpha})`; ctx.beginPath(); ctx.ellipse(gx,cy-capR*0.03,capRx*0.95,capR*0.85,0,0,Math.PI*2); ctx.fill();
-      ctx.fillStyle=`hsla(${20-hS},80%,${Math.max(8,34-lD)}%,${alpha})`; ctx.beginPath(); ctx.ellipse(gx,cy-capR*0.06,capRx*0.75,capR*0.7,0,0,Math.PI*2); ctx.fill();
-      ctx.fillStyle=`hsla(${28-hS},95%,${Math.max(12,46-lD)}%,${alpha})`; ctx.beginPath(); ctx.ellipse(gx,cy-capR*0.08,capRx*0.52,capR*0.52,0,0,Math.PI*2); ctx.fill();
-      // Hot core
-      const cdD=el>5500?Math.min(1,(el-5500)/2500):0, cA2=alpha*Math.max(0.1,1-cdD);
-      ctx.fillStyle=`hsla(40,100%,${Math.max(20,70-lD*2)}%,${cA2})`; ctx.beginPath(); ctx.ellipse(gx,cy-capR*0.1,capRx*0.3,capR*0.3,0,0,Math.PI*2); ctx.fill();
+      // 5 cap layers — brighter, outer 2 delayed darkening
+      ctx.fillStyle=`hsla(${12-outerHS},60%,${Math.max(5,28-outerLD)}%,${alpha})`; ctx.beginPath(); ctx.ellipse(gx,cy,capRx*1.15,capR*1.0,0,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle=`hsla(${16-outerHS},70%,${Math.max(8,35-outerLD)}%,${alpha})`; ctx.beginPath(); ctx.ellipse(gx,cy-capR*0.03,capRx*0.95,capR*0.85,0,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle=`hsla(${22-hS},85%,${Math.max(10,44-lD)}%,${alpha})`; ctx.beginPath(); ctx.ellipse(gx,cy-capR*0.06,capRx*0.75,capR*0.7,0,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle=`hsla(${30-hS},100%,${Math.max(15,55-lD)}%,${alpha})`; ctx.beginPath(); ctx.ellipse(gx,cy-capR*0.08,capRx*0.52,capR*0.52,0,0,Math.PI*2); ctx.fill();
+      // Hot core — stays bright longer
+      const cdD=el>6000?Math.min(1,(el-6000)/2500):0, cA2=alpha*Math.max(0.1,1-cdD);
+      ctx.fillStyle=`hsla(40,100%,${Math.max(22,75-lD*1.5)}%,${cA2})`; ctx.beginPath(); ctx.ellipse(gx,cy-capR*0.1,capRx*0.3,capR*0.3,0,0,Math.PI*2); ctx.fill();
 
       // Double fireball white core
       if(el<3500){ const wa=Math.min(1,(1-Math.max(0,el-500)/3000))*alpha; ctx.fillStyle=`rgba(255,255,230,${wa*0.8})`; ctx.beginPath(); ctx.ellipse(gx,cy-capR*0.05,capRx*0.18,capR*0.18,0,0,Math.PI*2); ctx.fill();
@@ -251,6 +254,25 @@ function drawTsar(now){
 
       // Base ring
       ctx.fillStyle=`hsla(${15-hS},70%,${Math.max(5,28-lD)}%,${alpha*0.7})`; ctx.beginPath(); ctx.ellipse(gx,cy+capR*0.55,capRx*1.2,capR*0.22,0,0,Math.PI*2); ctx.fill();
+
+      // Rolling side clouds — billow out from under the cap on each side of the stem
+      if(cg>0.2){
+        const rollT=Math.min(1,(cg-0.2)/0.8); // 0→1 as cap grows
+        const rollR=capR*0.35*rollT;
+        const baseRingY=cy+capR*0.55;
+        const rollSpread=capRx*0.7*rollT; // how far out from center
+        const rollDarkH=hS, rollDarkL=lD*0.7; // darken slightly less than core
+        for(let side=-1;side<=1;side+=2){
+          const rx=gx+side*rollSpread;
+          const ry=baseRingY+rollR*0.3; // sit slightly below base ring
+          // Outer cloud
+          ctx.fillStyle=`hsla(${18-rollDarkH},70%,${Math.max(6,26-rollDarkL)}%,${alpha*0.6})`;
+          ctx.beginPath(); ctx.ellipse(rx,ry,rollR*1.2,rollR*0.8,0,0,Math.PI*2); ctx.fill();
+          // Inner brighter
+          ctx.fillStyle=`hsla(${24-rollDarkH},85%,${Math.max(10,36-rollDarkL)}%,${alpha*0.5})`;
+          ctx.beginPath(); ctx.ellipse(rx,ry-rollR*0.1,rollR*0.7,rollR*0.5,0,0,Math.PI*2); ctx.fill();
+        }
+      }
 
       // 6 cloud bands
       const bn=el/1000;
