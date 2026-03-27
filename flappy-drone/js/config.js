@@ -10,7 +10,7 @@ FD.H = 640;
 // --- Physics / gameplay ---
 FD.GRAVITY       = 0.22;
 FD.FLAP_FORCE    = -5.2;
-FD.PIPE_SPEED    = 1.6;
+FD.PIPE_SPEED    = 2.1;
 FD.PIPE_INTERVAL = 160;
 FD.GAP_SIZE      = 170;
 FD.PIPE_WIDTH    = 56;
