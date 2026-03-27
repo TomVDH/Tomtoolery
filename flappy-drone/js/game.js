@@ -799,6 +799,9 @@
       }
     }
 
+    // Fireworks render behind game buildings for depth
+    FD.drawFireworks();
+
     // ── Pipes rendered as buildings ──────────────────────────
     pipes.forEach(function (p) {
       var seed = ((p.id * 2654435761) >>> 0);
@@ -835,9 +838,8 @@
       FD.drawBuilding(bldg);
     });
 
-    // Pickups, fireworks, particles
+    // Pickups + particles (in front of buildings), fireworks drawn earlier
     FD.drawPickups();
-    FD.drawFireworks();
     FD.drawParticles();
 
     // Drone during play
