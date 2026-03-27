@@ -583,6 +583,29 @@
       var topH = driftMin + Math.random() * (driftMax - driftMin);
       var newGapCenter = topH + curGap / 2;
 
+      // ── Minimum vertical jump ──────────────────────────────
+      // Force a minimum distance between consecutive gap centres
+      // so gameplay always requires active repositioning.
+      var minJump;
+      if (activeMode === 'rush') {
+        minJump = 60 + Math.min(1, score / 15) * 60;      // 60 → 120px
+      } else if (score < 8) {
+        minJump = 30;
+      } else if (score < 18) {
+        minJump = 50;
+      } else {
+        minJump = 70;
+      }
+      var actualDelta = Math.abs(newGapCenter - lastGapCenterY);
+      if (actualDelta < minJump) {
+        // Push gap away from last position by the minimum amount
+        var pushDir = (newGapCenter >= lastGapCenterY) ? 1 : -1;
+        newGapCenter = lastGapCenterY + pushDir * minJump;
+        // Clamp to playable bounds
+        newGapCenter = Math.max(minTop + curGap / 2, Math.min(maxTop + curGap / 2, newGapCenter));
+        topH = newGapCenter - curGap / 2;
+      }
+
       // ── Dynamic spacing (Classic only) ──────────────────────
       // Big vertical jumps get extra horizontal room so the drone
       // can physically reach the next gap. Small jumps stay tight.

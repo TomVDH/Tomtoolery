@@ -223,7 +223,27 @@
     var driftMax = Math.min(maxTop, biasedY - curGap / 2 + maxDrift);
     if (driftMin > driftMax) driftMin = driftMax;
     var topH = driftMin + Math.random() * (driftMax - driftMin);
-    pipeLastGapY = topH + curGap / 2;
+    var newGapCenter = topH + curGap / 2;
+
+    // Minimum vertical jump — force active repositioning
+    var minJump;
+    if (pipeMode === 'rush') {
+      minJump = 60 + Math.min(1, score / 15) * 60;
+    } else if (score < 8) {
+      minJump = 30;
+    } else if (score < 18) {
+      minJump = 50;
+    } else {
+      minJump = 70;
+    }
+    var actualDelta = Math.abs(newGapCenter - pipeLastGapY);
+    if (actualDelta < minJump) {
+      var pushDir = (newGapCenter >= pipeLastGapY) ? 1 : -1;
+      newGapCenter = pipeLastGapY + pushDir * minJump;
+      newGapCenter = Math.max(minTop + curGap / 2, Math.min(maxTop + curGap / 2, newGapCenter));
+      topH = newGapCenter - curGap / 2;
+    }
+    pipeLastGapY = newGapCenter;
 
     // Pipe width
     var id = pipeIdCounter++;
