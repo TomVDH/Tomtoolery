@@ -185,56 +185,64 @@
       ctx.fillText('Set.', W / 2 + offsetX, textY);
 
     } else {
-      // "DRONE!" -- smacks in, holds, then BLOWS UP past viewport with O centred
+      // "DRONE!" — milestone-style slam in, hold with breathe, scale-revert out
       const phase = (t - 0.75) / 0.25;
 
-      if (phase < 0.5) {
-        // Phase 1: smack in and hold (0-50% of segment)
-        const smackT = Math.min(1, phase / 0.12);
-        const scaleOvershoot = smackT < 1 ? 1 + (1 - smackT) * 0.2 : 1;
-        const alpha = Math.min(1, smackT * 1.5);
+      let droneScale, droneAlpha;
 
-        ctx.save();
-        ctx.translate(W / 2, textY);
-        ctx.scale(scaleOvershoot, scaleOvershoot);
-        ctx.globalAlpha = alpha;
-        ctx.font = '700 36px "Courier New", monospace';
-        ctx.fillStyle = '#00d4ff';
-        ctx.shadowColor = '#00d4ffaa';
-        ctx.shadowBlur = 30;
-        ctx.fillText('DRONE!', 0, 0);
-        ctx.shadowBlur = 12;
-        ctx.fillText('DRONE!', 0, 0);
-        ctx.shadowBlur = 0;
-        ctx.shadowColor = 'transparent';
-        ctx.restore();
+      if (phase < 0.15) {
+        // Slam in: scale 2.0→1.0 with overshoot (like milestone)
+        const p = phase / 0.15;
+        const ease = p < 0.7 ? p / 0.7 : 1 + (1 - (p - 0.7) / 0.3) * 0.15;
+        droneScale = 2.0 - ease * 1.0;
+        droneAlpha = Math.min(1, p * 2);
+
+        // Particle burst on first frame
+        if (phase < 0.02) {
+          for (let pi = 0; pi < 14; pi++) {
+            const a = (pi / 14) * Math.PI * 2 + Math.random() * 0.3;
+            const spd = 1.5 + Math.random() * 2.5;
+            FD.particles.push({
+              x: W / 2 + Math.cos(a) * 25,
+              y: textY + Math.sin(a) * 18,
+              vx: Math.cos(a) * spd,
+              vy: Math.sin(a) * spd - 0.5,
+              life: 25 + Math.random() * 20, maxLife: 45,
+              r: 1.5 + Math.random() * 2,
+              hue: 190 + Math.random() * 20, sat: 100, lum: 70,
+              glow: true
+            });
+          }
+        }
+      } else if (phase < 0.7) {
+        // Hold with gentle breathe
+        droneScale = 1.0 + Math.sin((phase - 0.15) * 12) * 0.02;
+        droneAlpha = 1;
       } else {
-        // Phase 2: BLOW UP — scale massively, O moves to centre, fade out
-        const blowT = (phase - 0.5) / 0.5; // 0→1
-        const easeT = 1 - Math.pow(1 - blowT, 2); // ease-out
-        const scale = 1 + easeT * 18; // 1x → 19x
-        const alpha = Math.max(0, 1 - easeT * 1.2);
-
-        // The O in DRONE! is the 4th char. Offset so O lands at screen centre.
-        // At 36px font, "DRON" is ~4 chars wide. Approximate O centre offset.
-        ctx.save();
-        ctx.translate(W / 2, H / 2); // blow up from screen centre
-        ctx.scale(scale, scale);
-        ctx.globalAlpha = alpha;
-        ctx.font = '700 36px "Courier New", monospace';
-        ctx.fillStyle = '#00d4ff';
-        ctx.shadowColor = `rgba(0, 212, 255, ${alpha * 0.7})`;
-        ctx.shadowBlur = 20 + easeT * 40;
-        // Offset text so the O character sits at origin (0,0)
-        // "DRONE!" — O is at index 2. Each char ~21.6px in Courier. O centre ≈ 2.5 chars in = 54px from start
-        // Text is centred, so half-width = ~65px. O offset from centre ≈ 54 - 65 = -11px
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('DRONE!', 11, textY - H / 2); // shift so O aligns to origin
-        ctx.shadowBlur = 0;
-        ctx.shadowColor = 'transparent';
-        ctx.restore();
+        // Revert out: scale back up to 2.0, fade to 0
+        const revertT = (phase - 0.7) / 0.3;
+        const easeOut = revertT * revertT; // ease-in for snappy exit
+        droneScale = 1.0 + easeOut * 1.2;
+        droneAlpha = Math.max(0, 1 - easeOut * 1.5);
       }
+
+      ctx.save();
+      ctx.translate(W / 2, textY);
+      ctx.scale(droneScale, droneScale);
+      ctx.globalAlpha = droneAlpha;
+      ctx.font = '700 42px "Segoe UI", system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#00d4ff';
+      ctx.shadowColor = '#00d4ff';
+      ctx.shadowBlur = 30;
+      ctx.fillText('DRONE!', 0, 0);
+      ctx.shadowBlur = 12;
+      ctx.fillText('DRONE!', 0, 0);
+      ctx.shadowBlur = 0;
+      ctx.shadowColor = 'transparent';
+      ctx.globalAlpha = 1;
+      ctx.restore();
     }
     ctx.globalAlpha = 1;
   };
