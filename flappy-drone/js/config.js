@@ -8,14 +8,14 @@ FD.W = 620;
 FD.H = 640;
 
 // --- Physics / gameplay ---
-FD.GRAVITY       = 0.26;
-FD.FLAP_FORCE    = -5.4;
-FD.PIPE_SPEED    = 2.4;
-FD.PIPE_INTERVAL = 110;
-FD.GAP_SIZE      = 175;
-FD.PIPE_WIDTH    = 56;
-FD.GROUND_H      = 48;
-FD.CEILING_Y     = 10;
+FD.GRAVITY       = 0.26;     // px/frame² downward acceleration
+FD.FLAP_FORCE    = -5.4;     // px/frame upward impulse on tap
+FD.PIPE_SPEED    = 2.4;      // px/frame base scroll speed (Classic)
+FD.PIPE_INTERVAL = 75;       // frames between pipe spawns (Classic base, ramps to 50)
+FD.GAP_SIZE      = 175;      // px vertical opening between pipes (base, shrinks per mode)
+FD.PIPE_WIDTH    = 56;       // px standard pipe/building width
+FD.GROUND_H      = 48;       // px ground strip height
+FD.CEILING_Y     = 10;       // px top boundary for drone
 
 // --- Death sequence timing (frames) ---
 FD.DEATH_FLASH_DUR = 15;       // red flash

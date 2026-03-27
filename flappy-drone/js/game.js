@@ -29,6 +29,7 @@
   let groundScroll = 0;   // accumulated ground offset (tracks curSpeed)
   let farCityScroll = 0;  // accumulated far-city offset (tracks curSpeed)
   let lastGapCenterY = H / 2; // track last gap center to constrain placement
+  let lastPipeSpawnX = 0;    // x-position tracker for pixel-based pipe spacing (Classic)
   let frame = 0;
   let deathTimer = 0;
   let readyStartTime = 0;
@@ -83,6 +84,7 @@
     groundScroll = 0;
     farCityScroll = 0;
     lastGapCenterY = H / 2;
+    lastPipeSpawnX = 0;
     deathTimer = 0;
     hudEl.textContent = '0';
 
@@ -189,6 +191,8 @@
   });
   canvas.addEventListener('click', flap);
   canvas.addEventListener('touchstart', function (e) { e.preventDefault(); flap(); }, { passive: false });
+  loreEl.addEventListener('click', flap);
+  loreEl.addEventListener('touchstart', function (e) { e.preventDefault(); flap(); }, { passive: false });
 
   // --- Drone cycle (left/right arrow keys or click the label) ---
   function cycleDrone(dir) {
@@ -495,65 +499,103 @@
     drone.angle += (targetAngle - drone.angle) * 0.12;
     drone.propPhase += 0.5;
 
-    // --- Difficulty ramp ---
-    var curGap, curInterval;
+    // ── Difficulty ramp ──────────────────────────────────────────
+    // Classic: constant speed, constant gap, pixel-based spacing.
+    //   Difficulty comes from progressive vertical oscillation only —
+    //   inspired by original Flappy Bird's constant-physics design.
+    // Rush: speed/gap/interval all ramp aggressively.
+    var curGap, curSpacing;
 
     if (activeMode === 'rush') {
-      // ZENA RUSH: starts fast, ramps brutally
+      // ZENA RUSH — starts fast, ramps brutally
       var rushBuildT = Math.min(1, score / 20);
-      // Gap stays wide until score 8, then narrows
-      var rushGapT = score < 8 ? 0 : Math.min(1, (score - 8) / 20);
-      curGap = FD.GAP_SIZE - rushGapT * 65;               // 175 → 110
-      curInterval = Math.round(80 - rushBuildT * 25);               // 80 → 55
-      // Speed: starts at 9.45 (450% of Classic 2.1), ramps to 12
-      var rushSpeedT = Math.min(1, score / 30);
-      curSpeed = 9.45 + rushSpeedT * 2.55;                // 9.45 → 12
+      var rushGapT   = score < 8 ? 0 : Math.min(1, (score - 8) / 20);
+      curGap    = FD.GAP_SIZE - rushGapT * 65;            // 175 → 110 px
+      curSpeed  = 9.45 + Math.min(1, score / 30) * 2.55;  // 9.45 → 12.0 px/f
+      // Rush still uses frame-based interval (high speed makes pixel spacing impractical)
+      var rushInterval = Math.round(60 - rushBuildT * 20); // 60 → 40 frames
     } else {
-      // CLASSIC: speed & spacing ramp together
-      var buildT = Math.min(1, score / 25);
-      // Gap stays generous until score 10, then shrinks steadily
-      var gapT = score < 10 ? 0 : Math.min(1, (score - 10) / 20);
-      curGap = FD.GAP_SIZE - gapT * 75;                   // 175 → 100
-      curInterval = Math.round(FD.PIPE_INTERVAL - buildT * 30); // 110 → 80
-      // Speed: noticeable jump at gate 5, keeps climbing
-      var speedT;
-      if (score < 5) {
-        speedT = 0;
-      } else {
-        speedT = Math.min(1, (score - 5) / 20);
-      }
-      curSpeed = FD.PIPE_SPEED + speedT * 3.5;            // 2.4 → 5.9
+      // CLASSIC — constant physics, progressive oscillation
+      curGap    = 155;                                     // constant gap
+      curSpeed  = 2.8;                                     // constant speed
+      curSpacing = 200;                                    // constant pixel distance between pipes
     }
 
-    // Spawn pipes — gap Y constrained to prevent impossible sequences
-    if (frame % curInterval === 0) {
+    // ── Spawn pipes ─────────────────────────────────────────────
+    // Classic uses pixel-based spacing: spawn when last pipe has scrolled
+    // far enough. Rush uses frame-based interval.
+    // Gap Y is constrained with drift limits and alternation bias to
+    // create an oscillating pattern that intensifies with score.
+    var shouldSpawn = false;
+    if (activeMode === 'rush') {
+      shouldSpawn = (frame % rushInterval === 0);
+    } else {
+      // Pixel-based: track how far we've scrolled since last spawn
+      lastPipeSpawnX += curSpeed;
+      if (lastPipeSpawnX >= curSpacing || pipes.length === 0) {
+        shouldSpawn = true;
+        lastPipeSpawnX = 0;
+      }
+    }
+
+    if (shouldSpawn) {
       var minTop = 70;
       var maxTop = H - curGap - FD.GROUND_H - 70;
-      // Max drift from last gap center — tighter at higher speed
-      var driftRatio = Math.min(1, (curSpeed - FD.PIPE_SPEED) / 3.5);
-      var maxDrift = Math.max(80, 150 - driftRatio * 70); // 150px early → 80px at peak
-      var lastCenter = lastGapCenterY;
-      // Clamp the random range around the last gap center
-      var driftMin = Math.max(minTop, lastCenter - curGap / 2 - maxDrift);
-      var driftMax = Math.min(maxTop, lastCenter - curGap / 2 + maxDrift);
-      if (driftMin > driftMax) driftMin = driftMax; // safety
+
+      // ── Vertical oscillation — progressive by gate tier ────
+      // Early: gentle drift near centre. Late: full-range swings with traps.
+      var maxDrift, biasAmt;
+      if (activeMode === 'rush') {
+        maxDrift = Math.max(120, 200 - Math.min(1, curSpeed / 12) * 60);
+        biasAmt  = 0.45;
+      } else if (score < 10) {
+        // Tier 1 (gates 0–9): gentle, gaps stay near middle
+        maxDrift = 80;
+        biasAmt  = 0.15;
+      } else if (score < 20) {
+        // Tier 2 (gates 10–19): full range, alternation kicks in
+        maxDrift = 150;
+        biasAmt  = 0.35;
+      } else if (score < 30) {
+        // Tier 3 (gates 20–29): aggressive swings top↔bottom
+        maxDrift = 200;
+        biasAmt  = 0.50;
+      } else {
+        // Tier 4 (gates 30+): max oscillation + trap potential
+        // Occasional same-height repeat followed by a big jump
+        maxDrift = 220;
+        biasAmt  = (Math.random() < 0.25) ? 0.05 : 0.55; // 25% chance of "trap" (stays put)
+      }
+
+      // Alternation bias — push toward opposite side of screen centre
+      var midY    = (minTop + maxTop + curGap) / 2;
+      var biasDir = (lastGapCenterY > midY) ? -1 : 1;
+      var biasedY = lastGapCenterY + biasDir * maxDrift * biasAmt;
+
+      // Random placement within drift range, clamped to playable bounds
+      var driftMin = Math.max(minTop, biasedY - curGap / 2 - maxDrift);
+      var driftMax = Math.min(maxTop, biasedY - curGap / 2 + maxDrift);
+      if (driftMin > driftMax) driftMin = driftMax;
       var topH = driftMin + Math.random() * (driftMax - driftMin);
       lastGapCenterY = topH + curGap / 2;
-      var id = Math.floor(frame / curInterval);
-      // Width: before score 15 = standard only; after = increasingly wide
-      var widthRoll = ((id * 31 + 17) * 53) % 100;
-      var pipeW;
-      if (score < 8) {
-        pipeW = FD.PIPE_WIDTH; // standard only for first few gates
-      } else {
-        // Wide buildings start at gate 8, chance 15% → 50%
-        var bt = (activeMode === 'rush') ? Math.min(1, score / 20) : buildT;
-        var wideChance = 15 + bt * 35;
-        pipeW = widthRoll < (100 - wideChance) ? FD.PIPE_WIDTH : FD.PIPE_WIDTH + 20 + Math.floor(bt * 20);
+
+      // Pipe width — wider buildings appear randomly between gates 15–25
+      var id = pipes.length / 2;
+      var pipeW = FD.PIPE_WIDTH;
+      if (score >= 15) {
+        var widthRoll = Math.random() * 100;
+        // Chance ramps from 20% at gate 15 to 50% at gate 25+
+        var wideChance = Math.min(50, 20 + (score - 15) * 3);
+        if (widthRoll < wideChance) {
+          pipeW = FD.PIPE_WIDTH + 20 + Math.floor(Math.random() * 25);
+        }
       }
+
+      // Push top + bottom pipe pair
+      var botY = topH + curGap;
       pipes.push(
-        { x: W + 10, w: pipeW, y: 0,             h: topH,                                   fromTop: true,  scored: false, id: id },
-        { x: W + 10, w: pipeW, y: topH + curGap, h: H - FD.GROUND_H - topH - curGap, fromTop: false, scored: false, id: id }
+        { x: W + 10, w: pipeW, y: 0,    h: topH,                   fromTop: true,  scored: false, id: id },
+        { x: W + 10, w: pipeW, y: botY, h: H - FD.GROUND_H - botY, fromTop: false, scored: false, id: id }
       );
     }
 
@@ -561,46 +603,55 @@
     pipes.forEach(function (p) { p.x -= curSpeed; });
     pipes = pipes.filter(function (p) { return p.x + p.w > -20; });
 
-    // Score
+    // ── Scoring ────────────────────────────────────────────────
+    // A gate is scored when the drone passes a pipe pair's trailing edge.
     for (var i = 0; i < pipes.length; i += 2) {
       if (pipes[i] && !pipes[i].scored && pipes[i].x + pipes[i].w < drone.x - 12) {
         pipes[i].scored = true;
         score++;
         hudEl.textContent = score;
 
-        // Zena Rush: bonus time every 5 gates
+        // Rush: bonus time every N gates
         if (activeMode === 'rush' && score > 0 && score % RUSH_BONUS_EVERY === 0) {
           rushTimer += RUSH_BONUS_TIME;
-          rushBonusFlash = 60; // 1 second of flash
+          rushBonusFlash = 60;
         }
 
-        // Secret win at score 65
-        if (score >= WIN_SCORE) {
-          win();
-          return;
+        // Gate 20+: launch a firework on every gate for visual distraction
+        if (score >= 20) {
+          var fx = 40 + Math.random() * (W - 80);
+          var sizeRoll = Math.random();
+          var fwSize = sizeRoll < 0.15 ? 2 : sizeRoll < 0.5 ? 1 : 0;
+          FD.fireworks.push({
+            x: fx, y: H - FD.GROUND_H,
+            vy: -(2.5 + Math.random() * 2.5),
+            hue: Math.random() * 360,
+            targetY: 40 + Math.random() * 250,
+            trail: [], exploded: false, size: fwSize
+          });
         }
+
+        // Secret win condition
+        if (score >= WIN_SCORE) { win(); return; }
       }
     }
 
-    // Zena Rush: tick timer down
+    // ── Zena Rush timer ─────────────────────────────────────────
     if (activeMode === 'rush' && state === 'play') {
       rushTimer -= FRAME_MS / 1000;
       if (rushBonusFlash > 0) rushBonusFlash--;
-      // Update timer HUD
-      hudTimerEl.textContent = (rushBonusFlash > 0 ? '+' + RUSH_BONUS_TIME + 's  ' : '') + Math.max(0, rushTimer).toFixed(1);
+      hudTimerEl.textContent = (rushBonusFlash > 0 ? '+' + RUSH_BONUS_TIME + 's  ' : '')
+        + Math.max(0, rushTimer).toFixed(1);
       hudTimerEl.classList.toggle('critical', rushTimer < 5);
-      // Time's up — nuke death
-      if (rushTimer <= 0) {
-        rushTimer = 0;
-        nukeAndDie();
-        return;
-      }
+      if (rushTimer <= 0) { rushTimer = 0; nukeAndDie(); return; }
     }
 
-    // Speed HUD
+    // ── HUD ───────────────────────────────────────────────────
     hudSpeedEl.textContent = curSpeed.toFixed(1) + 'x';
 
-    // Collision detection
+    // ── Collision detection ───────────────────────────────────
+    // Hitbox is slightly smaller than the drone sprite for fairness.
+    // Pipe hitbox has +2px padding on each side for visual match.
     var hb = { x: drone.x - 10, y: drone.y - 4, w: 20, h: 12 };
     for (var j = 0; j < pipes.length; j++) {
       var p = pipes[j];
@@ -610,31 +661,29 @@
         die(); return;
       }
     }
-
-    // Ground collision
     if (drone.y > H - FD.GROUND_H - 8) { drone.y = H - FD.GROUND_H - 8; die(); return; }
 
-    // Firework spawning (after 5 gates cleared)
+    // ── Ambient fireworks (random, gate 5+) ───────────────────
     if (score >= 5) {
       FD.fwTimer--;
       if (FD.fwTimer <= 0) {
-        FD.fwTimer = 180 + Math.random() * 220;
-        var fx = 40 + Math.random() * (W - 80);
-        var sizeRoll = Math.random();
-        var size = sizeRoll < 0.1 ? 2 : sizeRoll < 0.4 ? 1 : 0;
+        FD.fwTimer = 180 + Math.random() * 220;           // ~3–6.5 s between launches
+        var afx = 40 + Math.random() * (W - 80);
+        var aRoll = Math.random();
+        var aSize = aRoll < 0.1 ? 2 : aRoll < 0.4 ? 1 : 0;
         FD.fireworks.push({
-          x: fx, y: H - FD.GROUND_H,
+          x: afx, y: H - FD.GROUND_H,
           vy: -(2.5 + Math.random() * 2.5),
           hue: Math.random() * 360,
           targetY: 40 + Math.random() * 250,
-          trail: [], exploded: false, size: size
+          trail: [], exploded: false, size: aSize
         });
       }
     }
 
-    // Accumulate scroll offsets so background tracks actual speed
-    groundScroll += curSpeed;
-    farCityScroll += curSpeed * 0.05; // parallax ratio
+    // ── Scroll accumulators (backgrounds track game speed) ────
+    groundScroll  += curSpeed;
+    farCityScroll += curSpeed * 0.05;
 
     FD.updateParticles();
     FD.updateFireworks();
@@ -671,8 +720,10 @@
       : (FD.globalTick * FD.PIPE_SPEED) % 24;
     FD.drawGround(scrollOffset);
 
-    // Gap danger marker — only at high speeds (Rush always, Classic after speed ramp kicks in)
-    if (state === 'play' && curSpeed > 4.0) {
+    // ── Gap danger marker (Rush only) ────────────────────────
+    // Draws a bracket + chevron on the right edge showing where the
+    // next gap is, fading in while the pipe is still off-screen.
+    if (state === 'play' && activeMode === 'rush') {
       var markerShown = false;
       for (var gi = 0; gi < pipes.length && !markerShown; gi += 2) {
         var gp = pipes[gi];
@@ -683,8 +734,8 @@
           var gapTopY = gp.h; // bottom of top pipe = top of gap
           var gapBotY = pipes[gi+1] ? pipes[gi+1].y : gapTopY + 140;
           var gapCenterY = (gapTopY + gapBotY) / 2;
-          // Fade based on distance: fades in smoothly over a wider range
-          var distFade = 1 - Math.min(1, Math.max(0, gp.x - W * 0.6) / 300);
+          // Fade based on distance: appears early while pipe is still off-screen
+          var distFade = 1 - Math.min(1, Math.max(0, gp.x - W) / (W * 0.8));
           var pulse = 0.6 + 0.4 * Math.sin(FD.globalTick * 0.12);
           var markerAlpha = distFade * pulse * 0.7;
           // Draw chevron marker at right edge
@@ -710,7 +761,7 @@
       }
     }
 
-    // Pipes as buildings
+    // ── Pipes rendered as buildings ──────────────────────────
     pipes.forEach(function (p) {
       var seed = ((p.id * 2654435761) >>> 0);
       var bldg = {
@@ -820,7 +871,9 @@
       FD.drawDrone(drone.x, drone.y, drone.angle, drone.propPhase, activeDroneType);
     }
 
-    // Fixed timestep: update logic at 60fps regardless of display refresh rate
+    // ── Fixed timestep ──────────────────────────────────────
+    // Update logic runs at 60 fps regardless of display refresh rate.
+    // Accumulator is capped at 4 frames to prevent spiral of death on tab-switch.
     var now = performance.now();
     updateAccum += now - lastFrameTime;
     lastFrameTime = now;
