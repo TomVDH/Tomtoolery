@@ -6,12 +6,13 @@
   body { background: #0a0a18; color: #e0e0e0; font-family: 'SF Mono', 'Menlo', monospace; padding: 20px; display: flex; flex-direction: column; align-items: center; }
   h1 { color: #fff; font-size: 20px; margin-bottom: 4px; }
   .sub { color: #888; font-size: 12px; margin-bottom: 20px; }
-  .row { display: flex; gap: 20px; align-items: flex-start; }
+  .row { display: flex; gap: 24px; align-items: flex-start; justify-content: center; }
   .panel { display: flex; flex-direction: column; align-items: center; }
   .panel h2 { font-size: 13px; letter-spacing: 2px; margin-bottom: 8px; }
   .panel.current h2 { color: #00c8f0; }
   .panel.tsar h2 { color: #ff4400; }
   canvas { border: 2px solid #1a1a3a; border-radius: 14px; box-shadow: 0 0 80px #00d4ff08, 0 8px 40px #00000090; }
+  body { overflow: auto; min-height: auto; }
   .controls { margin-top: 12px; display: flex; gap: 8px; }
   button { background: #151528; border: 1px solid #ff4400; color: #ff8844; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 12px; font-family: inherit; }
   button:hover { background: #1a0800; }
@@ -32,7 +33,7 @@
 <div class="row" style="margin-top:16px;">
   <div class="panel current">
     <h2>CLASSIC (IN-GAME)</h2>
-    <canvas id="cA" width="400" height="420"></canvas>
+    <canvas id="cA" width="620" height="640"></canvas>
     <div class="controls">
       <button onclick="triggerA()">Detonate</button>
     </div>
@@ -40,7 +41,7 @@
   </div>
   <div class="panel tsar">
     <h2>TSAR BOMBA</h2>
-    <canvas id="cB" width="400" height="420"></canvas>
+    <canvas id="cB" width="620" height="640"></canvas>
     <div class="controls">
       <button onclick="triggerB()">Detonate</button>
     </div>
@@ -63,7 +64,7 @@ function makeCity(W){ const b=[]; for(let x=0;x<W;x+=12+Math.random()*10) b.push
 
 // ============ CLASSIC NUKE (current in-game) ============
 const cA = document.getElementById('cA'), ctxA = cA.getContext('2d');
-const WA=400, HA=420, GYA=HA*0.78;
+const WA=620, HA=640, GYA=HA*0.78;
 let nukeA=false, startA=0;
 const starsA=makeStars(WA,HA), cloudsA=makeClouds(WA), cityA=makeCity(WA);
 
@@ -168,7 +169,7 @@ function drawClassic(now){
 
 // ============ TSAR BOMBA ============
 const cB = document.getElementById('cB'), ctxB = cB.getContext('2d');
-const WB=400, HB=420, GYB=HB*0.78;
+const WB=620, HB=640, GYB=HB*0.78;
 let nukeB=false, startB=0;
 const starsB=makeStars(WB,HB), cloudsB=makeClouds(WB), cityB=makeCity(WB);
 
