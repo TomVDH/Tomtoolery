@@ -725,6 +725,8 @@
       FD.drawGround(scrollOffset);
     }
 
+    FD.drawParticles(false); // Background debris
+
     // Test buildings
     testBuildings.forEach(b => FD.drawBuilding(b));
 
@@ -753,7 +755,7 @@
 
     FD.drawPickups();
     FD.drawFireworks();
-    FD.drawParticles();
+    FD.drawParticles(true); // Foreground debris
 
     // Drone — compute nuke silhouette
     const bobY = drone.y;

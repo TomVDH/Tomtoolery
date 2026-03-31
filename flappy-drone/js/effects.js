@@ -118,13 +118,31 @@
     }
   };
 
-  // --- Draw particles ---
+  // --- Draw particles (enhanced: trails, colour-cooling, additive blending) ---
   FD.drawParticles = function () {
     const ctx = FD.ctx;
     FD.particles.forEach(p => {
       const t = p.life / p.maxLife;
+
+      // Trail rendering (if particle has trail history)
+      if (p.hasTrail && p.trailList && p.trailList.length > 1) {
+        const age = p.maxLife - p.life;
+        const trailAlpha = age < 90 ? (age / 90) * 0.5 : t * 0.5;
+        ctx.globalAlpha = trailAlpha;
+        ctx.strokeStyle = `hsla(${p.hue}, ${(p.sat || 100) * 0.7}%, ${(p.lum || 55) * 0.6}%, ${trailAlpha})`;
+        ctx.lineWidth = p.r * t * 0.5;
+        ctx.beginPath();
+        p.trailList.forEach((pt, i) => {
+          if (i === 0) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y);
+        });
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+
       if (p.glow) {
-        // Radial glow burst — bright centre, fast falloff
+        // Additive blending for hot glow particles (lum > 70)
+        var useAdditive = (p.lum || 55) > 70;
+        if (useAdditive) ctx.globalCompositeOperation = 'lighter';
         const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * t);
         grad.addColorStop(0, `hsla(${p.hue}, ${p.sat}%, ${p.lum}%, ${t * 0.8})`);
         grad.addColorStop(0.25, `hsla(${p.hue}, ${p.sat}%, ${p.lum - 10}%, ${t * 0.4})`);
@@ -132,16 +150,21 @@
         grad.addColorStop(1, `hsla(${p.hue}, ${p.sat}%, ${p.lum - 30}%, 0)`);
         ctx.fillStyle = grad;
         ctx.beginPath(); ctx.arc(p.x, p.y, p.r * t, 0, Math.PI * 2); ctx.fill();
+        if (useAdditive) ctx.globalCompositeOperation = 'source-over';
       } else if (p.streak) {
-        // Streak particle — motion trail line + head dot
+        // Colour-cooling: bright → deep red → dark grey as particle ages
+        const age01 = 1 - t;
+        const sHue = p.hue - age01 * 18;
+        const sSat = Math.max(20, (p.sat || 100) - age01 * 70);
+        const sLum = Math.max(12, (p.lum || 55) + (1 - age01) * 20 - age01 * 30);
         ctx.globalAlpha = t * 0.7;
-        ctx.strokeStyle = `hsl(${p.hue}, ${p.sat || 100}%, ${(p.lum || 55) + (1 - t) * 20}%)`;
+        ctx.strokeStyle = `hsl(${sHue}, ${sSat}%, ${sLum}%)`;
         ctx.lineWidth = p.r * t * 0.8;
         ctx.beginPath();
         ctx.moveTo(p.x - p.vx * 3, p.y - p.vy * 3);
         ctx.lineTo(p.x, p.y);
         ctx.stroke();
-        ctx.fillStyle = `hsl(${p.hue}, ${p.sat || 100}%, ${(p.lum || 55) + (1 - t) * 25}%)`;
+        ctx.fillStyle = `hsl(${sHue}, ${sSat}%, ${Math.min(95, sLum + 15)}%)`;
         ctx.beginPath(); ctx.arc(p.x, p.y, p.r * t * 0.6, 0, Math.PI * 2); ctx.fill();
       } else {
         ctx.globalAlpha = t * 0.75;
@@ -153,9 +176,16 @@
     ctx.globalAlpha = 1;
   };
 
-  // --- Update particles ---
+  // --- Update particles (enhanced: trail tracking, ground clamp) ---
   FD.updateParticles = function () {
+    var groundY = FD.H - FD.GROUND_H;
     FD.particles.forEach(p => {
+      // Trail history
+      if (p.hasTrail) {
+        if (!p.trailList) p.trailList = [];
+        p.trailList.push({ x: p.x, y: p.y });
+        if (p.trailList.length > 20) p.trailList.shift();
+      }
       p.x += p.vx; p.y += p.vy;
       p.vx *= (p.damping || 0.98);
       p.vy *= (p.damping || 0.98);
@@ -227,8 +257,10 @@
     });
   };
 
-  // --- Nuke mushroom cloud (11s timeline) ---
-  // Drawn behind city layer. Rim light on buildings is handled by buildings.js.
+  // --- Nuke mushroom cloud: NOVA MK-V (11s timeline) ---
+  // Turbulent noisy cap, hourglass stem, blue-white core, differential darkening,
+  // outward-arcing debris with trails, building dust kick-up, ground fires,
+  // atmospheric haze, additive blending. Drawn behind city layer.
   FD.drawNukeCloud = function () {
     if (!FD.nukeActive) return;
     const ctx = FD.ctx;
@@ -236,139 +268,321 @@
     const elapsed = performance.now() - FD.nukeStart;
     const totalMs = 11000;
     const gx = FD.nukeGx, gy = FD.nukeGy;
+    const t = elapsed / 1000;
 
-    // Shockwave ring
-    if (elapsed > 200 && elapsed < 2000) {
-      const st = (elapsed - 200) / 1800;
-      const radius = st * Math.max(W, H) * 0.8;
-      ctx.globalAlpha = (1 - st) * 0.3;
-      ctx.strokeStyle = 'rgba(255, 200, 100, 0.6)';
-      ctx.lineWidth = 3 + (1 - st) * 8;
-      ctx.beginPath(); ctx.arc(gx, gy, radius, 0, Math.PI * 2); ctx.stroke();
-      ctx.globalAlpha = 1;
+    if (elapsed < 100) { if (elapsed > totalMs) FD.nukeActive = false; return; }
+
+    const cloudT = Math.min(1, (elapsed - 100) / 5800);
+    const fadeT  = elapsed > 9500 ? Math.min(1, (elapsed - 9500) / 1500) : 0;
+    const darkT  = elapsed > 3500 ? Math.min(1, (elapsed - 3500) / 4000) : 0;
+    const alpha  = (1 - fadeT) * 0.95;
+    if (alpha < 0.01) { if (elapsed > totalMs) FD.nukeActive = false; return; }
+    ctx.globalAlpha = alpha;
+
+    const riseEase = 1 - Math.pow(1 - Math.min(1, cloudT * 1.5), 3);
+    const slowDrift = Math.min(1, elapsed / totalMs) * H * 0.05;
+    const cY = gy - riseEase * (H * 0.5) - slowDrift;
+    const capGrow = Math.min(1, cloudT * 2.5);
+    const capR = 50 + capGrow * 70;
+    const capRx = capR * 1.5;
+    const hShift = darkT * 20;
+    const lDrop  = darkT * 35;
+
+    // Noisy ellipse helper — turbulent organic cap boundary
+    const drawNoisyEllipse = (cx, cy, rx, ry, iOff, flattenBottom) => {
+      ctx.beginPath();
+      for (let j = 0; j <= 60; j++) {
+        const angle = (j / 60) * Math.PI * 2;
+        const turb = Math.sin(angle * 12 + t * 0.6 + iOff) * 0.03 + Math.cos(angle * 7 - t * 0.5 + iOff * 2) * 0.04;
+        const px = cx + Math.cos(angle) * rx * (1 + turb);
+        const yDir = Math.sin(angle);
+        const ryMult = (flattenBottom && yDir > 0) ? 0.55 : 1.0;
+        const py = cy + yDir * ry * (1 + turb) * ryMult;
+        if (j === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.fill();
+    };
+
+    // Thermal god rays (0-2.5s)
+    if (elapsed < 2500) {
+      const rayAlpha = (1 - (elapsed / 2500) ** 2) * 0.05;
+      ctx.save();
+      ctx.globalAlpha = rayAlpha;
+      ctx.globalCompositeOperation = 'screen';
+      for (let i = 0; i < 8; i++) {
+        const angle = (i / 8) * Math.PI + Math.PI;
+        const sweep = Math.sin(t * 0.4 + i * 1.7) * 0.08;
+        const fa = angle + sweep;
+        const len = W * 0.8 + Math.sin(t * 1.2 + i * 3) * 40;
+        const grad = ctx.createLinearGradient(gx, gy, gx + Math.cos(fa) * len, gy + Math.sin(fa) * len);
+        grad.addColorStop(0, 'rgba(255,200,100,1)');
+        grad.addColorStop(1, 'rgba(255,100,50,0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.moveTo(gx, gy);
+        ctx.lineTo(gx + Math.cos(fa - 0.05) * len, gy + Math.sin(fa - 0.05) * len);
+        ctx.lineTo(gx + Math.cos(fa + 0.05) * len, gy + Math.sin(fa + 0.05) * len);
+        ctx.fill();
+      }
+      ctx.restore();
     }
 
-    // Mushroom cloud
-    if (elapsed > 100) {
-      const cloudT = Math.min(1, (elapsed - 100) / 3000);
-      const fadeT = elapsed > 9000 ? Math.min(1, (elapsed - 9000) / 2000) : 0;
-      const darkT = elapsed > 3000 ? Math.min(1, (elapsed - 3000) / 3500) : 0;
-      const alpha = (1 - fadeT) * 0.85;
+    // Shockwave + ground dust band
+    if (elapsed > 200 && elapsed < 2800) {
+      const st = (elapsed - 200) / 2600;
+      const radius = st * Math.max(W, H) * 0.9;
+      ctx.globalAlpha = alpha * Math.max(0, 1 - st) * 0.4;
+      ctx.strokeStyle = 'rgba(255,200,100,0.7)';
+      ctx.lineWidth = 4 + (1 - st) * 15;
+      ctx.beginPath(); ctx.arc(gx, gy, radius, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = alpha;
+      const gw = st * W * 1.8, gh = 15 + st * 15;
+      const lg = ctx.createLinearGradient(0, gy - gh, 0, gy);
+      lg.addColorStop(0, 'rgba(200,160,120,0)');
+      lg.addColorStop(1, `rgba(200,160,120,${(1 - st) * 0.6})`);
+      ctx.fillStyle = lg;
+      ctx.fillRect(gx - gw / 2, gy - gh, gw, gh);
+    }
 
-      if (alpha > 0.01) {
-        ctx.globalAlpha = alpha;
-        const riseEase = 1 - Math.pow(1 - Math.min(1, cloudT * 1.5), 3);
-        const slowDrift = Math.min(1, elapsed / totalMs) * H * 0.07;
-        const cloudCenterY = gy - riseEase * (H * 0.45) - slowDrift;
-        const stemBaseY = gy;
-        const capGrow = Math.min(1, cloudT * 2);
-        const capR = 40 + capGrow * 55;
-        const capRx = capR * 1.4;
-        const stemTopW = 18 + capGrow * 12;
-        const stemBaseW = 30 + capGrow * 25;
+    // Hourglass stem with bezier necking
+    const stemTopW = 25 + capGrow * 18;
+    const stemBaseW = 45 + capGrow * 40;
+    const neckPinch = stemTopW * 0.3;
+    const stemGrad = ctx.createLinearGradient(gx, cY + capR * 0.3, gx, gy);
+    stemGrad.addColorStop(0, `hsla(${25 - hShift},90%,${Math.max(10, 50 - lDrop)}%,${alpha})`);
+    stemGrad.addColorStop(0.4, `hsla(${20 - hShift},85%,${Math.max(8, 40 - lDrop)}%,${alpha})`);
+    stemGrad.addColorStop(1, `hsla(${15 - hShift},70%,${Math.max(5, 30 - lDrop)}%,${alpha})`);
+    ctx.fillStyle = stemGrad;
+    const midY = (cY + gy) / 2;
+    const wobble = Math.sin(t * 1.2) * 12;
+    ctx.beginPath();
+    ctx.moveTo(gx - stemTopW / 2, cY + capR * 0.3);
+    ctx.bezierCurveTo(gx - stemTopW * 0.6 + wobble, cY + (midY - cY) * 0.5, gx - stemTopW * 0.3 + wobble - neckPinch * 0.5, midY - 20, gx - stemTopW * 0.4 + wobble, midY);
+    ctx.bezierCurveTo(gx - stemTopW * 0.5 + wobble + neckPinch * 0.3, midY + 20, gx - stemBaseW * 0.4, gy - 30, gx - stemBaseW / 2, gy);
+    ctx.lineTo(gx + stemBaseW / 2, gy);
+    ctx.bezierCurveTo(gx + stemBaseW * 0.4, gy - 30, gx + stemTopW * 0.5 + wobble + neckPinch * 0.3, midY + 20, gx + stemTopW * 0.4 + wobble, midY);
+    ctx.bezierCurveTo(gx + stemTopW * 0.3 + wobble - neckPinch * 0.5, midY - 20, gx + stemTopW * 0.6 + wobble, cY + (midY - cY) * 0.5, gx + stemTopW / 2, cY + capR * 0.3);
+    ctx.closePath(); ctx.fill();
 
-        // Color darkening over time
-        const hShift = darkT * 15;
-        const lDrop = darkT * 30;
+    // Stem core glow line
+    const coreGlowA = alpha * Math.max(0, 0.5 - darkT * 0.4);
+    if (coreGlowA > 0.01) {
+      const cg = ctx.createLinearGradient(gx, cY + capR * 0.3, gx, gy);
+      cg.addColorStop(0, `hsla(40,100%,${Math.max(20, 65 - lDrop)}%,${coreGlowA})`);
+      cg.addColorStop(1, `hsla(25,100%,${Math.max(10, 40 - lDrop)}%,${coreGlowA * 0.2})`);
+      ctx.fillStyle = cg;
+      ctx.fillRect(gx - stemTopW * 0.075, cY + capR * 0.3, stemTopW * 0.15, gy - cY - capR * 0.3);
+    }
 
-        // Intense base glow
-        const baseGlowR = capRx * 1.8;
-        const baseGlowAlpha = alpha * Math.max(0, 1 - darkT * 0.7);
-        const baseGlow = ctx.createRadialGradient(gx, stemBaseY, 0, gx, stemBaseY, baseGlowR);
-        baseGlow.addColorStop(0, `hsla(35, 100%, 70%, ${baseGlowAlpha * 0.7})`);
-        baseGlow.addColorStop(0.15, `hsla(28, 100%, 50%, ${baseGlowAlpha * 0.35})`);
-        baseGlow.addColorStop(0.4, `hsla(20, 100%, 30%, ${baseGlowAlpha * 0.08})`);
-        baseGlow.addColorStop(1, 'hsla(15, 100%, 20%, 0)');
-        ctx.fillStyle = baseGlow;
-        ctx.beginPath();
-        ctx.arc(gx, stemBaseY, baseGlowR, 0, Math.PI * 2);
-        ctx.fill();
+    // Base glow
+    const bgR = capRx * 2.2;
+    const bgA = alpha * Math.max(0, 1 - (elapsed / 2000));
+    const bg = ctx.createRadialGradient(gx, gy, 0, gx, gy, bgR);
+    bg.addColorStop(0, `hsla(40,100%,80%,${bgA})`);
+    bg.addColorStop(0.15, `hsla(30,100%,60%,${bgA * 0.5})`);
+    bg.addColorStop(0.4, `hsla(20,100%,40%,${bgA * 0.1})`);
+    bg.addColorStop(1, 'hsla(15,100%,20%,0)');
+    ctx.fillStyle = bg;
+    ctx.beginPath(); ctx.arc(gx, gy, bgR, 0, Math.PI * 2); ctx.fill();
 
-        // Stem
-        const stemGrad = ctx.createLinearGradient(gx, cloudCenterY + capR * 0.3, gx, stemBaseY);
-        stemGrad.addColorStop(0, `hsla(${25 - hShift}, 90%, ${Math.max(10, 45 - lDrop)}%, ${alpha})`);
-        stemGrad.addColorStop(0.4, `hsla(${20 - hShift}, 85%, ${Math.max(8, 35 - lDrop)}%, ${alpha})`);
-        stemGrad.addColorStop(1, `hsla(${15 - hShift}, 70%, ${Math.max(5, 25 - lDrop)}%, ${alpha})`);
-        ctx.fillStyle = stemGrad;
-        ctx.beginPath();
-        ctx.moveTo(gx - stemTopW / 2, cloudCenterY + capR * 0.3);
-        ctx.quadraticCurveTo(gx - stemTopW * 0.6, (cloudCenterY + stemBaseY) / 2, gx - stemBaseW / 2, stemBaseY);
-        ctx.lineTo(gx + stemBaseW / 2, stemBaseY);
-        ctx.quadraticCurveTo(gx + stemTopW * 0.6, (cloudCenterY + stemBaseY) / 2, gx + stemTopW / 2, cloudCenterY + capR * 0.3);
-        ctx.closePath(); ctx.fill();
+    // Sub-cloud at stem-cap intersection
+    ctx.fillStyle = `hsla(${18 - hShift},85%,${Math.max(8, 35 - lDrop)}%,${alpha})`;
+    drawNoisyEllipse(gx, cY + capR * 0.25, capRx * 0.75, capR * 0.4, 10, false);
 
-        // Glow (soft radial)
-        const glowRadius = capRx * 2.5;
-        const glowGrad = ctx.createRadialGradient(gx, cloudCenterY, capR * 0.2, gx, cloudCenterY, glowRadius);
-        glowGrad.addColorStop(0, `hsla(30, 100%, ${Math.max(15, 60 - lDrop * 2)}%, ${alpha * 0.35})`);
-        glowGrad.addColorStop(0.4, `hsla(25, 100%, ${Math.max(10, 45 - lDrop * 2)}%, ${alpha * 0.15})`);
-        glowGrad.addColorStop(1, 'hsla(15, 100%, 30%, 0)');
-        ctx.fillStyle = glowGrad;
-        ctx.beginPath();
-        ctx.arc(gx, cloudCenterY, glowRadius, 0, Math.PI * 2);
-        ctx.fill();
+    // Differential darkening — outer layers darken faster
+    const outerDark = Math.min(1, darkT * 1.4);
+    const midDark   = darkT;
+    const innerDark = Math.min(1, darkT * 0.6);
+    const coreDark  = Math.min(1, darkT * 0.35);
+    const outerHShift = outerDark * 22;
+    const outerLDrop  = outerDark * 40;
 
-        // Cap layers (darken over time)
-        ctx.fillStyle = `hsla(${12 - hShift}, 60%, ${Math.max(5, 22 - lDrop)}%, ${alpha})`;
-        ctx.beginPath(); ctx.ellipse(gx, cloudCenterY, capRx * 1.1, capR * 0.95, 0, 0, Math.PI * 2); ctx.fill();
+    // 4 plasma cap layers with noisy edges
+    ctx.fillStyle = `hsla(${8 - outerHShift},${90 - outerDark * 30}%,${Math.max(4, 22 - outerLDrop)}%,${alpha})`;
+    drawNoisyEllipse(gx, cY, capRx * 1.0, capR * 0.95, 0, true);
+    ctx.fillStyle = `hsla(${14 - midDark * 20},${92 - midDark * 20}%,${Math.max(6, 30 - midDark * 32)}%,${alpha})`;
+    drawNoisyEllipse(gx, cY - capR * 0.03, capRx * 0.85, capR * 0.82, 1, true);
+    ctx.fillStyle = `hsla(${25 - innerDark * 18},${95 - innerDark * 15}%,${Math.max(10, 42 - innerDark * 28)}%,${alpha})`;
+    drawNoisyEllipse(gx, cY - capR * 0.06, capRx * 0.65, capR * 0.65, 2, true);
+    ctx.fillStyle = `hsla(${40 - coreDark * 15},100%,${Math.max(15, 58 - coreDark * 25)}%,${alpha})`;
+    drawNoisyEllipse(gx, cY - capR * 0.08, capRx * 0.45, capR * 0.45, 3, false);
 
-        ctx.fillStyle = `hsla(${18 - hShift}, 80%, ${Math.max(8, 32 - lDrop)}%, ${alpha})`;
-        ctx.beginPath(); ctx.ellipse(gx, cloudCenterY - capR * 0.05, capRx * 0.9, capR * 0.8, 0, 0, Math.PI * 2); ctx.fill();
+    // Blue-white hot core (hue 210 → 45 as it cools)
+    const coreExtDk = elapsed > 6500 ? Math.min(1, (elapsed - 6500) / 2000) : 0;
+    const coreA = alpha * Math.max(0.1, 1 - coreExtDk);
+    const coreHue = 210 - coreExtDk * 165;
+    ctx.fillStyle = `hsla(${coreHue},100%,${Math.max(25, 90 - coreExtDk * 55)}%,${coreA})`;
+    drawNoisyEllipse(gx, cY - capR * 0.1, capRx * 0.25, capR * 0.25, 20, false);
+    if (cloudT < 0.35) {
+      ctx.fillStyle = `rgba(220,230,255,${(1 - cloudT / 0.35) * alpha})`;
+      drawNoisyEllipse(gx, cY, capRx * 0.12, capR * 0.12, 30, false);
+    }
 
-        ctx.fillStyle = `hsla(${25 - hShift}, 90%, ${Math.max(10, 42 - lDrop)}%, ${alpha})`;
-        ctx.beginPath(); ctx.ellipse(gx, cloudCenterY - capR * 0.08, capRx * 0.65, capR * 0.6, 0, 0, Math.PI * 2); ctx.fill();
+    // Rolling hotspots on cap face
+    for (let hs = 0; hs < 4; hs++) {
+      if (t < 0.5 + hs * 0.3 || darkT > 0.8) continue;
+      const hsX = gx + Math.sin(t * 0.3 + hs * 2.5) * capRx * 0.4;
+      const hsY = cY - capR * 0.05 + Math.cos(t * 0.25 + hs * 1.8) * capR * 0.25;
+      const hsR = capR * 0.12 * (1 - darkT * 0.7);
+      const hsA = alpha * 0.35 * (1 - darkT);
+      const hsg = ctx.createRadialGradient(hsX, hsY, 0, hsX, hsY, hsR);
+      hsg.addColorStop(0, `hsla(42,100%,72%,${hsA})`);
+      hsg.addColorStop(0.5, `hsla(35,100%,55%,${hsA * 0.3})`);
+      hsg.addColorStop(1, 'hsla(25,100%,40%,0)');
+      ctx.fillStyle = hsg;
+      ctx.beginPath(); ctx.arc(hsX, hsY, hsR, 0, Math.PI * 2); ctx.fill();
+    }
 
-        // Hot core -- last to darken, lingers bright
-        const coreDarkDelay = elapsed > 5500 ? Math.min(1, (elapsed - 5500) / 2500) : 0;
-        const coreAlpha = alpha * Math.max(0.1, 1 - coreDarkDelay);
-        ctx.fillStyle = `hsla(40, 100%, ${Math.max(20, 70 - lDrop * 2)}%, ${coreAlpha})`;
-        ctx.beginPath(); ctx.ellipse(gx, cloudCenterY - capR * 0.1, capRx * 0.35, capR * 0.35, 0, 0, Math.PI * 2); ctx.fill();
+    // Base ring / skirt
+    ctx.fillStyle = `hsla(${15 - hShift},70%,${Math.max(5, 28 - lDrop)}%,${alpha * 0.8})`;
+    drawNoisyEllipse(gx, cY + capR * 0.4, capRx * 1.15, capR * 0.22, 12, false);
 
-        // White-hot center
-        if (cloudT < 0.4) {
-          const wa = (1 - cloudT / 0.4) * alpha;
-          ctx.fillStyle = `rgba(255, 255, 220, ${wa})`;
-          ctx.beginPath(); ctx.ellipse(gx, cloudCenterY, capRx * 0.2, capR * 0.2, 0, 0, Math.PI * 2); ctx.fill();
-        }
+    // 3 cloud bands
+    for (let i = 0; i < 3; i++) {
+      const entryT = 0.15 + i * 0.15;
+      if (cloudT < entryT) continue;
+      const bandAge = Math.min(1, (cloudT - entryT) / 0.35);
+      const t01 = i / 2;
+      const finalY2 = cY - capR * (0.55 - t01 * 1.0) - 35;
+      const startY = cY + capR * 0.5;
+      const bandY = startY + (finalY2 - startY) * bandAge + Math.sin(t * (0.4 + i * 0.25) + i * 2.3) * capR * 0.03;
+      const widthAtY = capRx * (0.6 + t01 * 0.8) * bandAge;
+      const fade2 = (0.7 + t01 * 0.3) * bandAge;
+      const pulse = 0.3 + 0.1 * Math.sin(t * (1.2 + i * 0.4) + i * 1.7);
+      const bandAlpha = alpha * pulse * fade2;
+      ctx.strokeStyle = `hsla(${24 - hShift + i * 3},75%,${Math.max(10, (44 - i * 4) - lDrop)}%,${bandAlpha})`;
+      ctx.lineWidth = (4 + t01 * 2) * bandAge;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(gx - widthAtY, bandY);
+      const sag1 = capR * 0.05 * Math.sin(t * (0.6 + i * 0.3) + i);
+      const sag2 = capR * 0.04 * Math.sin(t * (0.5 + i * 0.2) + i + 1.5);
+      ctx.quadraticCurveTo(gx - widthAtY * 0.35, bandY + sag1, gx, bandY + sag2);
+      ctx.quadraticCurveTo(gx + widthAtY * 0.35, bandY - sag1, gx + widthAtY, bandY);
+      ctx.stroke();
+    }
 
-        // Base ring
-        ctx.fillStyle = `hsla(${15 - hShift}, 70%, ${Math.max(5, 28 - lDrop)}%, ${alpha * 0.7})`;
-        ctx.beginPath(); ctx.ellipse(gx, cloudCenterY + capR * 0.5, capRx * 1.15, capR * 0.25, 0, 0, Math.PI * 2); ctx.fill();
+    // === DEBRIS PARTICLES ===
+    const highStemY = cY + (gy - cY) * 0.30;
 
-        // Concentric cloud bands
-        {
-          const now = elapsed / 1000;
-          for (let i = 0; i < 3; i++) {
-            const entryT = 0.15 + i * 0.15;
-            if (cloudT < entryT) continue;
-            const bandAge = Math.min(1, (cloudT - entryT) / 0.35);
-            const t01 = i / 2;
-            const finalY = cloudCenterY - capR * (0.55 - t01 * 1.0) - 35;
-            const startY = cloudCenterY + capR * 0.5;
-            const bandY = startY + (finalY - startY) * bandAge
-              + Math.sin(now * (0.4 + i * 0.25) + i * 2.3) * capR * 0.03;
-            const widthAtY = capRx * (0.6 + t01 * 0.8) * bandAge;
-            const fade = (0.7 + t01 * 0.3) * bandAge;
-            const pulse = 0.3 + 0.1 * Math.sin(now * (1.2 + i * 0.4) + i * 1.7);
-            const bandAlpha = alpha * pulse * fade;
-            const bandL = Math.max(10, (44 - i * 4) - lDrop);
-            const bandH = 24 - hShift + i * 3;
-            const sag1 = capR * 0.05 * Math.sin(now * (0.6 + i * 0.3) + i);
-            const sag2 = capR * 0.04 * Math.sin(now * (0.5 + i * 0.2) + i + 1.5);
-            ctx.strokeStyle = `hsla(${bandH}, 75%, ${bandL}%, ${bandAlpha})`;
-            ctx.lineWidth = (4 + t01 * 2) * bandAge;
-            ctx.lineCap = 'round';
-            ctx.beginPath();
-            ctx.moveTo(gx - widthAtY, bandY);
-            ctx.quadraticCurveTo(gx - widthAtY * 0.35, bandY + sag1, gx, bandY + sag2);
-            ctx.quadraticCurveTo(gx + widthAtY * 0.35, bandY - sag1, gx + widthAtY, bandY);
-            ctx.stroke();
-          }
-        }
-
-        ctx.globalAlpha = 1;
+    // Outward-arcing debris from mid-stem (paired streak + glow with trails)
+    if (elapsed > 200 && elapsed < 2000) {
+      for (let i = 0; i < 2; i++) {
+        if (FD.particles.length >= 300) break;
+        const dir = Math.random() < 0.5 ? -1 : 1;
+        const px = gx + (Math.random() - 0.5) * 15;
+        const py = highStemY + (Math.random() - 0.5) * 30;
+        const pvx = dir * (0.15 + Math.random() * 0.35);
+        const pvy = -0.5 - Math.random() * 0.5;
+        const plife = 800 + Math.random() * 800;
+        FD.particles.push({
+          x: px, y: py, vx: pvx, vy: pvy,
+          life: plife, maxLife: 1600, r: 2 + Math.random() * 1.5,
+          hue: 25 + Math.random() * 10, sat: 100, lum: 65,
+          damping: 0.9992, gravity: 0.0018, streak: true, hasTrail: true
+        });
+        FD.particles.push({
+          x: px, y: py, vx: pvx, vy: pvy,
+          life: plife, maxLife: 1600, r: 10 + Math.random() * 12,
+          hue: 15 + Math.random() * 10, sat: 100, lum: 50,
+          damping: 0.9992, gravity: 0.0018, glow: true
+        });
       }
     }
+
+    // Cap-edge debris
+    if (elapsed > 1200 && elapsed < 4000 && Math.random() < 0.2 && FD.particles.length < 300) {
+      for (let ci = 0; ci < 2; ci++) {
+        const dir = Math.random() < 0.5 ? -1 : 1;
+        const px = gx + dir * capRx * (0.5 + Math.random() * 0.4);
+        const py = cY - capR * 0.1 + (Math.random() - 0.5) * capR * 0.3;
+        const pvx = dir * (0.25 + Math.random() * 0.4);
+        const pvy = -0.05 - Math.random() * 0.15;
+        const plife = 600 + Math.random() * 500;
+        FD.particles.push({ x: px, y: py, vx: pvx, vy: pvy, life: plife, maxLife: 1100, r: 1 + Math.random() * 1.5, hue: 25 + Math.random() * 10, sat: 80, lum: 60, damping: 0.9993, gravity: 0.0014, streak: true, hasTrail: true });
+        FD.particles.push({ x: px, y: py, vx: pvx, vy: pvy, life: plife, maxLife: 1100, r: 8 + Math.random() * 10, hue: 18 + Math.random() * 10, sat: 85, lum: 50, damping: 0.9993, gravity: 0.0014, glow: true });
+      }
+    }
+
+    // Base fire
+    if (elapsed > 800 && elapsed < 4000 && Math.random() < 0.3 && FD.particles.length < 300) {
+      const bdir = Math.random() < 0.5 ? -1 : 1;
+      FD.particles.push({
+        x: gx + (Math.random() - 0.5) * stemBaseW * 1.5, y: gy - Math.random() * 10,
+        vx: bdir * (0.05 + Math.random() * 0.15), vy: -0.05 - Math.random() * 0.15,
+        life: 150 + Math.random() * 100, maxLife: 250, r: 20 + Math.random() * 30,
+        hue: 20 + Math.random() * 15, sat: 60, lum: 35, damping: 0.9998, gravity: -0.0003, glow: true
+      });
+    }
+
+    // Ash fallout
+    if (elapsed > 6500 && Math.random() < 0.3 && FD.particles.length < 500) {
+      FD.particles.push({
+        x: Math.random() * W, y: Math.random() * (H * 0.6),
+        vx: (Math.random() - 0.5) * 0.5, vy: 0.1 + Math.random() * 0.2,
+        life: 1500 + Math.random() * 1000, maxLife: 2500, r: 1 + Math.random() * 2,
+        hue: 25, sat: 100, lum: 45 + Math.random() * 25, damping: 0.99, gravity: 0.0005, streak: true
+      });
+    }
+
+    // Building dust kick-up (once at 2s)
+    if (elapsed > 2000 && !FD.nukeDustTriggered) {
+      FD.nukeDustTriggered = true;
+      var frontBldgs = FD.farBuildings.filter(function (b) { return b.layer === 'front' || !b.layer; });
+      frontBldgs.forEach(function (b) {
+        var roofY = H - FD.GROUND_H - b.h;
+        var numDust = Math.floor(b.w / 15) + 1;
+        for (var di = 0; di < numDust; di++) {
+          FD.particles.push({
+            x: b.x + Math.random() * b.w, y: roofY,
+            vx: (Math.random() - 0.5) * 1.5, vy: -0.5 - Math.random() * 1.5,
+            life: 200 + Math.random() * 300, maxLife: 500, r: 2 + Math.random() * 3,
+            hue: 30, sat: 20, lum: 30, damping: 0.93, gravity: 0.02, streak: true
+          });
+        }
+      });
+    }
+
+    // Ground fires (after 4s)
+    if (elapsed > 4000 && elapsed < 9000 && Math.random() < 0.08 && FD.particles.length < 500) {
+      FD.particles.push({
+        x: gx + (Math.random() - 0.5) * W * 0.7, y: gy - 2 - Math.random() * 4,
+        vx: (Math.random() - 0.5) * 0.05, vy: -0.02 - Math.random() * 0.04,
+        life: 60 + Math.random() * 80, maxLife: 140, r: 3 + Math.random() * 5,
+        hue: 25 + Math.random() * 15, sat: 100, lum: 55 + Math.random() * 20,
+        damping: 0.999, gravity: -0.0002, glow: true
+      });
+    }
+
+    // Atmospheric haze band at horizon
+    if (elapsed > 400 && elapsed < 9000) {
+      const hazeT = elapsed < 1500 ? (elapsed - 400) / 1100 : elapsed < 6000 ? 1 : 1 - (elapsed - 6000) / 3000;
+      const hazeH = 40 + hazeT * 50;
+      const hazeA = hazeT * 0.55;
+      ctx.save();
+      const hg = ctx.createLinearGradient(0, gy - hazeH, 0, gy + 10);
+      hg.addColorStop(0, `rgba(200,130,50,0)`);
+      hg.addColorStop(0.3, `rgba(180,100,40,${hazeA * 0.2})`);
+      hg.addColorStop(0.6, `rgba(160,80,30,${hazeA * 0.5})`);
+      hg.addColorStop(1, `rgba(140,60,20,${hazeA})`);
+      ctx.fillStyle = hg;
+      ctx.fillRect(0, gy - hazeH, W, hazeH + 10);
+      ctx.restore();
+    }
+
+    // Smoke trail children from streak particles
+    FD.particles.forEach(function (p) {
+      if (p.streak && p.hasTrail && p.life > 30 && p.life % 40 === 0 && FD.particles.length < 500) {
+        FD.particles.push({
+          x: p.x + (Math.random() - 0.5) * 3, y: p.y + (Math.random() - 0.5) * 3,
+          vx: (Math.random() - 0.5) * 0.03, vy: -0.01 - Math.random() * 0.02,
+          life: 80 + Math.random() * 60, maxLife: 140, r: 5 + Math.random() * 8,
+          hue: 20, sat: 30, lum: 25, damping: 0.9998, gravity: -0.0003, glow: true
+        });
+      }
+    });
+
+    ctx.globalAlpha = 1;
 
     // Shake
     if (elapsed < 1200) FD.screenShake = Math.max(FD.screenShake, 50 * (1 - elapsed / 1200));

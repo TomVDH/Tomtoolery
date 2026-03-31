@@ -278,7 +278,7 @@
 
     // After 1.5s, nuke goes off
     setTimeout(function () {
-      FD.nukeActive = true;
+      FD.nukeActive = true; FD.nukeDustTriggered = false;
       FD.nukeStart  = performance.now();
       FD.nukeGx     = W / 2 + (Math.random() - 0.5) * 80;
       FD.nukeGy     = H - FD.GROUND_H;
@@ -355,7 +355,7 @@
     if (activeMode === 'rush') {
       setTimeout(function () {
         if (state === 'dying') {
-          FD.nukeActive = true;
+          FD.nukeActive = true; FD.nukeDustTriggered = false;
           FD.nukeStart = performance.now();
           FD.nukeGx = W / 2 + (Math.random() - 0.5) * 80;
           FD.nukeGy = H - FD.GROUND_H;
@@ -379,7 +379,7 @@
   function nukeAndDie() {
     state = 'nuking';
     best = Math.max(best, score);
-    FD.nukeActive = true;
+    FD.nukeActive = true; FD.nukeDustTriggered = false;
     FD.nukeStart = performance.now();
     FD.screenShake = 12;
     hudEl.classList.remove('show');
@@ -770,8 +770,8 @@
 
     // Mountain silhouettes behind city
     FD.drawMountains(scrollX);
-    FD.drawNukeCloud();
     FD.drawFarCity(scrollX, 'back');
+    FD.drawNukeCloud();
 
     // Ground — tracks actual game speed
     var scrollOffset = (state === 'play' || state === 'dying' || state === 'dead')
@@ -824,6 +824,8 @@
     FD.drawFireworks();
     FD.drawFarCity(scrollX, 'front');
 
+    FD.drawParticles(false); // Draw all debris behind the city 
+
     // ── Pipes rendered as buildings ──────────────────────────
     pipes.forEach(function (p) {
       var seed = ((p.id * 2654435761) >>> 0);
@@ -862,7 +864,7 @@
 
     // Pickups + particles (in front of buildings), fireworks drawn earlier
     FD.drawPickups();
-    FD.drawParticles();
+    FD.drawParticles(true);
 
     // Drone during play
     if (state === 'play') {
