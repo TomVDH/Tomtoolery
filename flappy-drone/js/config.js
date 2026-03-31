@@ -171,6 +171,7 @@ FD.nukeActive   = false;
 FD.nukeStart    = 0;
 FD.nukeGx       = FD.W / 2;
 FD.nukeGy       = FD.H - FD.GROUND_H;
+FD.nukeDustTriggered = false;
 FD.pickups      = [];
 FD.deathText    = 'YOU DIED';
 

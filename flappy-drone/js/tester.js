@@ -167,7 +167,7 @@
   }
 
   function triggerNuke() {
-    FD.nukeActive = true;
+    FD.nukeActive = true; FD.nukeDustTriggered = false;
     FD.nukeStart = performance.now();
     FD.screenShake = 50;
     FD.nukeGx = W / 2 + (Math.random() - 0.5) * 80;
@@ -705,7 +705,6 @@
 
     // Mountain silhouettes behind city
     if (layerVisible.mountains) FD.drawMountains(scrollX * (parSpeedMtn / parSpeedFront || 1));
-    FD.drawNukeCloud();
 
     // City layers with uniform scale transform (anchored at ground)
     if (parScale !== 1.0) {
@@ -716,6 +715,7 @@
       ctx.translate(-W / 2, -scaleOriginY);
     }
     if (layerVisible.backCity) FD.drawFarCity(scrollX, 'back');
+    FD.drawNukeCloud();
     if (layerVisible.frontCity) FD.drawFarCity(scrollX, 'front');
     if (parScale !== 1.0) ctx.restore();
 

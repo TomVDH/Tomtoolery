@@ -119,15 +119,17 @@
   };
 
   // --- Draw particles (enhanced: trails, colour-cooling, additive blending) ---
-  FD.drawParticles = function () {
+  // Two-pass: call with isFg=false for background, isFg=true for foreground.
+  FD.drawParticles = function (isFg) {
     const ctx = FD.ctx;
     FD.particles.forEach(p => {
+      if (!!p.fg !== !!isFg) return;
       const t = p.life / p.maxLife;
 
       // Trail rendering (if particle has trail history)
       if (p.hasTrail && p.trailList && p.trailList.length > 1) {
         const age = p.maxLife - p.life;
-        const trailAlpha = age < 90 ? (age / 90) * 0.5 : t * 0.5;
+        const trailAlpha = age < 90 ? (age / 90) * 0.6 : t * 0.6;
         ctx.globalAlpha = trailAlpha;
         ctx.strokeStyle = `hsla(${p.hue}, ${(p.sat || 100) * 0.7}%, ${(p.lum || 55) * 0.6}%, ${trailAlpha})`;
         ctx.lineWidth = p.r * t * 0.5;
@@ -176,10 +178,24 @@
     ctx.globalAlpha = 1;
   };
 
-  // --- Update particles (enhanced: trail tracking, ground clamp) ---
+  // --- Update particles (enhanced: trail tracking, depth switch, impact flashes) ---
   FD.updateParticles = function () {
     var groundY = FD.H - FD.GROUND_H;
+    var flashes = [];
     FD.particles.forEach(p => {
+      // Depth switch: pop to foreground mid-flight
+      if (p.switchZ && p.life < p.maxLife * 0.65) {
+        p.fg = true;
+      }
+      // Ground impact flash — foreground debris hitting ground
+      if (p.fg && p.y > groundY - 10 && p.life > 15 && Math.random() < 0.02) {
+        p.life = 0;
+        flashes.push({
+          x: p.x, y: p.y, vx: 0, vy: -0.2,
+          life: 8, maxLife: 8, r: 25 + Math.random() * 20,
+          hue: 35, sat: 100, lum: 90, glow: true, fg: true
+        });
+      }
       // Trail history
       if (p.hasTrail) {
         if (!p.trailList) p.trailList = [];
@@ -193,6 +209,7 @@
       p.life--;
     });
     FD.particles = FD.particles.filter(p => p.life > 0);
+    flashes.forEach(function (f) { FD.particles.push(f); });
   };
 
   // --- Fireworks update (does NOT auto-spawn; callers handle that) ---
@@ -266,15 +283,15 @@
     const ctx = FD.ctx;
     const W = FD.W, H = FD.H;
     const elapsed = performance.now() - FD.nukeStart;
-    const totalMs = 11000;
+    const totalMs = 14000;
     const gx = FD.nukeGx, gy = FD.nukeGy;
     const t = elapsed / 1000;
 
     if (elapsed < 100) { if (elapsed > totalMs) FD.nukeActive = false; return; }
 
     const cloudT = Math.min(1, (elapsed - 100) / 5800);
-    const fadeT  = elapsed > 9500 ? Math.min(1, (elapsed - 9500) / 1500) : 0;
-    const darkT  = elapsed > 3500 ? Math.min(1, (elapsed - 3500) / 4000) : 0;
+    const fadeT  = elapsed > 12000 ? Math.min(1, (elapsed - 12000) / 2000) : 0;
+    const darkT  = elapsed > 3500 ? Math.min(1, (elapsed - 3500) / 4500) : 0;
     const alpha  = (1 - fadeT) * 0.95;
     if (alpha < 0.01) { if (elapsed > totalMs) FD.nukeActive = false; return; }
     ctx.globalAlpha = alpha;
@@ -407,16 +424,11 @@
     ctx.fillStyle = `hsla(${40 - coreDark * 15},100%,${Math.max(15, 58 - coreDark * 25)}%,${alpha})`;
     drawNoisyEllipse(gx, cY - capR * 0.08, capRx * 0.45, capR * 0.45, 3, false);
 
-    // Blue-white hot core (hue 210 → 45 as it cools)
+    // Hot core — warm amber, no blue/green
     const coreExtDk = elapsed > 6500 ? Math.min(1, (elapsed - 6500) / 2000) : 0;
     const coreA = alpha * Math.max(0.1, 1 - coreExtDk);
-    const coreHue = 210 - coreExtDk * 165;
-    ctx.fillStyle = `hsla(${coreHue},100%,${Math.max(25, 90 - coreExtDk * 55)}%,${coreA})`;
+    ctx.fillStyle = `hsla(35,100%,${Math.max(15, 80 - coreExtDk * 60)}%,${coreA})`;
     drawNoisyEllipse(gx, cY - capR * 0.1, capRx * 0.25, capR * 0.25, 20, false);
-    if (cloudT < 0.35) {
-      ctx.fillStyle = `rgba(220,230,255,${(1 - cloudT / 0.35) * alpha})`;
-      drawNoisyEllipse(gx, cY, capRx * 0.12, capR * 0.12, 30, false);
-    }
 
     // Rolling hotspots on cap face
     for (let hs = 0; hs < 4; hs++) {
@@ -474,18 +486,23 @@
         const py = highStemY + (Math.random() - 0.5) * 30;
         const pvx = dir * (0.15 + Math.random() * 0.35);
         const pvy = -0.5 - Math.random() * 0.5;
-        const plife = 800 + Math.random() * 800;
+        const shortLived = Math.random() < 0.4;
+        const plife = shortLived ? (300 + Math.random() * 400) : (800 + Math.random() * 800);
+        const pmaxLife = shortLived ? 700 : 1600;
+        const isFg = Math.random() < 0.45;
         FD.particles.push({
           x: px, y: py, vx: pvx, vy: pvy,
-          life: plife, maxLife: 1600, r: 2 + Math.random() * 1.5,
-          hue: 25 + Math.random() * 10, sat: 100, lum: 65,
-          damping: 0.9992, gravity: 0.0018, streak: true, hasTrail: true
+          life: plife, maxLife: pmaxLife, r: 2 + Math.random() * 1.5,
+          hue: 25 + Math.random() * 10, sat: 100, lum: 75,
+          damping: 0.9992, gravity: 0.0018, streak: true, hasTrail: true,
+          fg: false, switchZ: isFg
         });
         FD.particles.push({
           x: px, y: py, vx: pvx, vy: pvy,
-          life: plife, maxLife: 1600, r: 10 + Math.random() * 12,
-          hue: 15 + Math.random() * 10, sat: 100, lum: 50,
-          damping: 0.9992, gravity: 0.0018, glow: true
+          life: plife, maxLife: pmaxLife, r: 15 + Math.random() * 20,
+          hue: 15 + Math.random() * 10, sat: 100, lum: 65,
+          damping: 0.9992, gravity: 0.0018, glow: true,
+          fg: false, switchZ: isFg
         });
       }
     }
@@ -499,8 +516,9 @@
         const pvx = dir * (0.25 + Math.random() * 0.4);
         const pvy = -0.05 - Math.random() * 0.15;
         const plife = 600 + Math.random() * 500;
-        FD.particles.push({ x: px, y: py, vx: pvx, vy: pvy, life: plife, maxLife: 1100, r: 1 + Math.random() * 1.5, hue: 25 + Math.random() * 10, sat: 80, lum: 60, damping: 0.9993, gravity: 0.0014, streak: true, hasTrail: true });
-        FD.particles.push({ x: px, y: py, vx: pvx, vy: pvy, life: plife, maxLife: 1100, r: 8 + Math.random() * 10, hue: 18 + Math.random() * 10, sat: 85, lum: 50, damping: 0.9993, gravity: 0.0014, glow: true });
+        const isFg = Math.random() < 0.45;
+        FD.particles.push({ x: px, y: py, vx: pvx, vy: pvy, life: plife, maxLife: 1100, r: 1 + Math.random() * 1.5, hue: 25 + Math.random() * 10, sat: 80, lum: 60, damping: 0.9993, gravity: 0.0014, streak: true, hasTrail: true, fg: true });
+        FD.particles.push({ x: px, y: py, vx: pvx, vy: pvy, life: plife, maxLife: 1100, r: 8 + Math.random() * 10, hue: 18 + Math.random() * 10, sat: 85, lum: 50, damping: 0.9993, gravity: 0.0014, glow: true, fg: true });
       }
     }
 
@@ -511,52 +529,26 @@
         x: gx + (Math.random() - 0.5) * stemBaseW * 1.5, y: gy - Math.random() * 10,
         vx: bdir * (0.05 + Math.random() * 0.15), vy: -0.05 - Math.random() * 0.15,
         life: 150 + Math.random() * 100, maxLife: 250, r: 20 + Math.random() * 30,
-        hue: 20 + Math.random() * 15, sat: 60, lum: 35, damping: 0.9998, gravity: -0.0003, glow: true
+        hue: 20 + Math.random() * 15, sat: 60, lum: 35, damping: 0.9998, gravity: -0.0003, glow: true, fg: true
       });
     }
 
-    // Ash fallout
-    if (elapsed > 6500 && Math.random() < 0.3 && FD.particles.length < 500) {
-      FD.particles.push({
-        x: Math.random() * W, y: Math.random() * (H * 0.6),
-        vx: (Math.random() - 0.5) * 0.5, vy: 0.1 + Math.random() * 0.2,
-        life: 1500 + Math.random() * 1000, maxLife: 2500, r: 1 + Math.random() * 2,
-        hue: 25, sat: 100, lum: 45 + Math.random() * 25, damping: 0.99, gravity: 0.0005, streak: true
-      });
-    }
 
-    // Building dust kick-up (once at 2s)
-    if (elapsed > 2000 && !FD.nukeDustTriggered) {
-      FD.nukeDustTriggered = true;
-      var frontBldgs = FD.farBuildings.filter(function (b) { return b.layer === 'front' || !b.layer; });
-      frontBldgs.forEach(function (b) {
-        var roofY = H - FD.GROUND_H - b.h;
-        var numDust = Math.floor(b.w / 15) + 1;
-        for (var di = 0; di < numDust; di++) {
-          FD.particles.push({
-            x: b.x + Math.random() * b.w, y: roofY,
-            vx: (Math.random() - 0.5) * 1.5, vy: -0.5 - Math.random() * 1.5,
-            life: 200 + Math.random() * 300, maxLife: 500, r: 2 + Math.random() * 3,
-            hue: 30, sat: 20, lum: 30, damping: 0.93, gravity: 0.02, streak: true
-          });
-        }
-      });
-    }
 
     // Ground fires (after 4s)
-    if (elapsed > 4000 && elapsed < 9000 && Math.random() < 0.08 && FD.particles.length < 500) {
+    if (elapsed > 4000 && elapsed < 12000 && Math.random() < 0.08 && FD.particles.length < 500) {
       FD.particles.push({
         x: gx + (Math.random() - 0.5) * W * 0.7, y: gy - 2 - Math.random() * 4,
         vx: (Math.random() - 0.5) * 0.05, vy: -0.02 - Math.random() * 0.04,
         life: 60 + Math.random() * 80, maxLife: 140, r: 3 + Math.random() * 5,
         hue: 25 + Math.random() * 15, sat: 100, lum: 55 + Math.random() * 20,
-        damping: 0.999, gravity: -0.0002, glow: true
+        damping: 0.999, gravity: -0.0002, glow: true, fg: true
       });
     }
 
     // Atmospheric haze band at horizon
-    if (elapsed > 400 && elapsed < 9000) {
-      const hazeT = elapsed < 1500 ? (elapsed - 400) / 1100 : elapsed < 6000 ? 1 : 1 - (elapsed - 6000) / 3000;
+    if (elapsed > 400 && elapsed < 12500) {
+      const hazeT = elapsed < 1500 ? (elapsed - 400) / 1100 : elapsed < 9000 ? 1 : 1 - (elapsed - 9000) / 3500;
       const hazeH = 40 + hazeT * 50;
       const hazeA = hazeT * 0.55;
       ctx.save();
@@ -577,7 +569,8 @@
           x: p.x + (Math.random() - 0.5) * 3, y: p.y + (Math.random() - 0.5) * 3,
           vx: (Math.random() - 0.5) * 0.03, vy: -0.01 - Math.random() * 0.02,
           life: 80 + Math.random() * 60, maxLife: 140, r: 5 + Math.random() * 8,
-          hue: 20, sat: 30, lum: 25, damping: 0.9998, gravity: -0.0003, glow: true
+          hue: 20, sat: 30, lum: 25, damping: 0.9998, gravity: -0.0003, glow: true,
+          fg: p.fg || false
         });
       }
     });
