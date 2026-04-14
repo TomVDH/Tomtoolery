@@ -123,6 +123,16 @@ canvas { display: block; width: 100%; height: 100%; }
   font-family: 'Courier New', monospace;
   font-size: 10px; color: #6a7585; letter-spacing: 1.5px;
 }
+.copyright a.labs-link {
+  color: #8ac; text-decoration: none;
+  padding: 1px 6px; border: 1px solid #1f2840; border-radius: 3px;
+  font-weight: bold; letter-spacing: 2px; transition: all 0.15s;
+}
+.copyright a.labs-link:hover {
+  color: #0ff; border-color: #00c8f0;
+  background: rgba(0, 200, 240, 0.08);
+  box-shadow: 0 0 8px rgba(0, 200, 240, 0.2);
+}
 /* Drone renders on canvas below pickers — prompt sits below drone */
 .prompt {
   position: absolute; bottom: 110px; left: 0; right: 0;
