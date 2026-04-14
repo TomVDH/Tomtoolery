@@ -654,6 +654,208 @@
   };
 
   // --- Silhouette parts (for nuke backlight) ---
+  // ============================================================
+  // === FLEET WAVE 5 — silly + cool additions =================
+  // Pizza Box · Toaster · Bumblebee · Origami Crane · Witch Broom
+  // ============================================================
+
+  // --- Pizza Box ---
+  FD.drawDronePizzabox = function (propPhase) {
+    const ctx = FD.ctx;
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.14)'; ctx.fillRect(-13, 12, 26, 3);
+    // Cardboard box body
+    ctx.fillStyle = '#c8a070'; ctx.fillRect(-15, -5, 30, 11);
+    ctx.fillStyle = '#a07c4c'; ctx.fillRect(-15, 4, 30, 2); // shadow under lid
+    ctx.fillStyle = '#dab48a'; ctx.fillRect(-14, -4, 28, 2); // top highlight
+    // Lid edge
+    ctx.fillStyle = '#8c6840'; ctx.fillRect(-15, -5, 30, 1);
+    // Greasy spots
+    ctx.fillStyle = 'rgba(80,40,10,0.35)';
+    ctx.beginPath(); ctx.arc(-7, 0, 3, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(5, 1, 2, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(8, -2, 1.5, 0, Math.PI*2); ctx.fill();
+    // Logo (red triangle "slice" mark)
+    ctx.fillStyle = '#cc2a2a';
+    ctx.beginPath(); ctx.moveTo(-2, -2); ctx.lineTo(2, -2); ctx.lineTo(0, 2); ctx.closePath(); ctx.fill();
+    // Rotors poking out the four corners
+    const spin = Math.abs(Math.sin(propPhase));
+    const propW = spin * 11;
+    ctx.globalAlpha = 0.7; ctx.fillStyle = '#999';
+    ctx.fillRect(-19 - propW/2, -6, propW, 1.5); ctx.fillRect(19 - propW/2, -6, propW, 1.5);
+    ctx.fillRect(-19 - propW/2,  6, propW, 1.5); ctx.fillRect(19 - propW/2,  6, propW, 1.5);
+    ctx.globalAlpha = 1;
+    // Motor pegs
+    ctx.fillStyle = '#444'; ctx.fillRect(-17, -7, 2, 2); ctx.fillRect(15, -7, 2, 2);
+    ctx.fillRect(-17,  6, 2, 2); ctx.fillRect(15,  6, 2, 2);
+  };
+
+  // --- Toaster Drone ---
+  FD.drawDroneToaster = function (propPhase) {
+    const ctx = FD.ctx;
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.16)'; ctx.fillRect(-10, 11, 20, 3);
+    // Chrome body
+    ctx.fillStyle = '#d8dce0'; ctx.fillRect(-11, -6, 22, 13);
+    ctx.fillStyle = '#f4f6f8'; ctx.fillRect(-10, -6, 20, 3); // top highlight
+    ctx.fillStyle = '#9aa0a6'; ctx.fillRect(-11, 5, 22, 2);  // bottom shadow
+    // Two slots on top
+    ctx.fillStyle = '#1a1a22'; ctx.fillRect(-8, -5, 6, 2); ctx.fillRect(2, -5, 6, 2);
+    // Toast popping out (shifts up/down slightly)
+    const toastY = -8 + Math.sin(FD.globalTick * 0.05) * 1.2;
+    ctx.fillStyle = '#d4a060'; ctx.fillRect(-7, toastY, 4, 4);
+    ctx.fillStyle = '#a87838'; ctx.fillRect(-7, toastY + 3, 4, 1); // crust
+    // Lever
+    ctx.fillStyle = '#888'; ctx.fillRect(8, -2, 2, 4);
+    ctx.fillStyle = '#cc4422'; ctx.fillRect(8, -2, 2, 1.5); // red knob
+    // Crumb shower (exhaust)
+    ctx.fillStyle = '#a87038';
+    for (let i=0; i<5; i++) {
+      const cx = -6 + i*3 + (FD.globalTick*0.3 + i*7)%4 - 2;
+      const cy = 8 + (FD.globalTick*0.4 + i*11)%5;
+      ctx.fillRect(cx, cy, 1, 1);
+    }
+    // Indicator dial
+    ctx.fillStyle = '#ffaa22'; ctx.fillRect(-3, 0, 4, 3);
+    ctx.fillStyle = '#1a1a22'; ctx.fillRect(-1, 1, 2, 1);
+    // Rotors (small, hidden behind chrome)
+    const spin = Math.abs(Math.sin(propPhase));
+    const propW = spin * 9;
+    ctx.globalAlpha = 0.7; ctx.fillStyle = '#bbb';
+    ctx.fillRect(-15 - propW/2, -3, propW, 1.5); ctx.fillRect(15 - propW/2, -3, propW, 1.5);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#666'; ctx.fillRect(-14, -4, 3, 2); ctx.fillRect(11, -4, 3, 2);
+  };
+
+  // --- Bumblebee ---
+  FD.drawDroneBumblebee = function (propPhase) {
+    const ctx = FD.ctx;
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.14)'; ctx.fillRect(-9, 9, 18, 3);
+    // Plump body — yellow/black stripes
+    ctx.fillStyle = '#1a1a14';
+    ctx.beginPath(); ctx.ellipse(0, 1, 11, 7, 0, 0, Math.PI*2); ctx.fill();
+    // Yellow stripes
+    ctx.fillStyle = '#ffcc22';
+    ctx.fillRect(-8, -2, 5, 4);
+    ctx.fillRect(2, -2, 5, 4);
+    // Top fuzz highlight
+    ctx.fillStyle = '#ffe066';
+    ctx.fillRect(-7, -4, 4, 2); ctx.fillRect(3, -4, 4, 2);
+    // Big eyes
+    ctx.fillStyle = '#2a1a08'; ctx.fillRect(-9, -3, 3, 3); ctx.fillRect(6, -3, 3, 3);
+    ctx.fillStyle = '#fff'; ctx.fillRect(-8, -2, 1, 1); ctx.fillRect(7, -2, 1, 1);
+    // Tiny antennae with bobble
+    ctx.fillStyle = '#222';
+    ctx.fillRect(-5, -7, 1, 3); ctx.fillRect(4, -7, 1, 3);
+    ctx.beginPath(); ctx.arc(-4.5, -8, 1, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(4.5, -8, 1, 0, Math.PI*2); ctx.fill();
+    // Stinger
+    ctx.fillStyle = '#444'; ctx.beginPath();
+    ctx.moveTo(11, 0); ctx.lineTo(15, 1); ctx.lineTo(11, 2); ctx.closePath(); ctx.fill();
+    // Buzzing wing blur (translucent)
+    const buzz = Math.sin(propPhase * 4) * 1.5;
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = '#ddeeff';
+    ctx.beginPath(); ctx.ellipse(-3, -5 + buzz*0.3, 7, 3, -0.3, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(3, -5 - buzz*0.3, 7, 3, 0.3, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1;
+  };
+
+  // --- Origami Crane ---
+  FD.drawDroneCrane = function (propPhase) {
+    const ctx = FD.ctx;
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.10)'; ctx.fillRect(-9, 10, 18, 2);
+    // Wings flap with propPhase (no rotors)
+    const flap = Math.sin(propPhase * 2) * 0.4;
+    // Left wing
+    ctx.fillStyle = '#fafafa';
+    ctx.beginPath();
+    ctx.moveTo(-2, 0); ctx.lineTo(-14, -4 + flap*4);
+    ctx.lineTo(-12, 1 + flap*2); ctx.lineTo(-2, 3);
+    ctx.closePath(); ctx.fill();
+    // Wing crease shadow
+    ctx.fillStyle = '#d0d0d0';
+    ctx.beginPath();
+    ctx.moveTo(-2, 0); ctx.lineTo(-10, -2 + flap*3); ctx.lineTo(-2, 2);
+    ctx.closePath(); ctx.fill();
+    // Right wing
+    ctx.fillStyle = '#fafafa';
+    ctx.beginPath();
+    ctx.moveTo(2, 0); ctx.lineTo(14, -4 - flap*4);
+    ctx.lineTo(12, 1 - flap*2); ctx.lineTo(2, 3);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#d0d0d0';
+    ctx.beginPath();
+    ctx.moveTo(2, 0); ctx.lineTo(10, -2 - flap*3); ctx.lineTo(2, 2);
+    ctx.closePath(); ctx.fill();
+    // Body — folded rhombus
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.moveTo(0, -3); ctx.lineTo(5, 1); ctx.lineTo(0, 5); ctx.lineTo(-5, 1);
+    ctx.closePath(); ctx.fill();
+    // Centre fold line
+    ctx.fillStyle = '#cccccc'; ctx.fillRect(-0.5, -3, 1, 8);
+    // Long neck + head
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.moveTo(0, -3); ctx.lineTo(8, -8); ctx.lineTo(9, -7); ctx.lineTo(2, -2);
+    ctx.closePath(); ctx.fill();
+    // Beak
+    ctx.fillStyle = '#ffaa22';
+    ctx.beginPath(); ctx.moveTo(8, -8); ctx.lineTo(11, -8); ctx.lineTo(8, -7); ctx.closePath(); ctx.fill();
+    // Tail
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.moveTo(-5, 1); ctx.lineTo(-9, -2); ctx.lineTo(-7, 2); ctx.closePath(); ctx.fill();
+    // Eye dot
+    ctx.fillStyle = '#222'; ctx.fillRect(7, -7, 1, 1);
+  };
+
+  // --- Witch Broom ---
+  FD.drawDroneBroom = function (propPhase) {
+    const ctx = FD.ctx;
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.fillRect(-12, 11, 24, 2);
+    // Broom-stick body (long horizontal)
+    ctx.fillStyle = '#5a3a18'; ctx.fillRect(-10, -1, 18, 3);
+    // Wood grain highlight
+    ctx.fillStyle = '#7a5028'; ctx.fillRect(-10, -1, 18, 1);
+    // Brush bristles trailing left (bands of straw)
+    ctx.fillStyle = '#c8a050';
+    ctx.beginPath();
+    ctx.moveTo(-10, -2); ctx.lineTo(-18, -4); ctx.lineTo(-18, 4); ctx.lineTo(-10, 3);
+    ctx.closePath(); ctx.fill();
+    // Bristle strands
+    ctx.fillStyle = '#a07830';
+    for (let i=0; i<6; i++) {
+      const y = -3 + i*1.2;
+      ctx.fillRect(-17, y, 7, 0.6);
+    }
+    // Binding twine
+    ctx.fillStyle = '#3a2a18'; ctx.fillRect(-11, -2, 1.5, 5);
+    ctx.fillStyle = '#1a1208'; ctx.fillRect(-11, 0, 1.5, 1);
+    // Witch hat on the right end
+    ctx.fillStyle = '#1a1228';
+    ctx.beginPath();
+    ctx.moveTo(2, -1); ctx.lineTo(11, -10); ctx.lineTo(13, -1);
+    ctx.closePath(); ctx.fill();
+    // Hat brim
+    ctx.fillStyle = '#0a0612'; ctx.fillRect(0, -1, 14, 2);
+    // Hat band — moon
+    ctx.fillStyle = '#ffcc44';
+    ctx.beginPath(); ctx.arc(7, -3, 1.2, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#1a1228';
+    ctx.beginPath(); ctx.arc(8, -3.5, 1, 0, Math.PI*2); ctx.fill();
+    // Spark trail (purple magic flicker)
+    const flick = (FD.globalTick * 0.3) % 4;
+    ctx.fillStyle = `rgba(180,80,255,${0.6 - flick*0.13})`;
+    ctx.fillRect(-19 - flick, -1, 2, 1); ctx.fillRect(-21 - flick, 1, 1, 1);
+    ctx.fillStyle = `rgba(220,140,255,${0.5})`;
+    ctx.fillRect(-15, -2, 1, 1);
+  };
+
   FD.silhouetteParts = {
     quad() {
       const ctx = FD.ctx;
@@ -774,6 +976,51 @@
       ctx.lineTo(-11, 6);
       ctx.quadraticCurveTo(-13, 2.5, -11, -1);
       ctx.closePath(); ctx.fill();
+    },
+    pizzabox() {
+      const ctx = FD.ctx;
+      ctx.fillRect(-15, -5, 30, 11);
+      ctx.fillRect(-17, -7, 2, 2); ctx.fillRect(15, -7, 2, 2);
+      ctx.fillRect(-17,  6, 2, 2); ctx.fillRect(15,  6, 2, 2);
+    },
+    toaster() {
+      const ctx = FD.ctx;
+      ctx.fillRect(-11, -6, 22, 13);
+      ctx.fillRect(-7, -8, 4, 4);    // toast
+      ctx.fillRect(8, -2, 2, 4);     // lever
+      ctx.fillRect(-14, -4, 3, 2); ctx.fillRect(11, -4, 3, 2);
+    },
+    bumblebee() {
+      const ctx = FD.ctx;
+      ctx.beginPath(); ctx.ellipse(0, 1, 11, 7, 0, 0, Math.PI*2); ctx.fill();
+      ctx.fillRect(-5, -7, 1, 3); ctx.fillRect(4, -7, 1, 3);
+      ctx.beginPath(); ctx.moveTo(11, 0); ctx.lineTo(15, 1); ctx.lineTo(11, 2); ctx.closePath(); ctx.fill();
+    },
+    crane() {
+      const ctx = FD.ctx;
+      ctx.beginPath();
+      ctx.moveTo(0, -3); ctx.lineTo(5, 1); ctx.lineTo(0, 5); ctx.lineTo(-5, 1);
+      ctx.closePath(); ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(-2, 0); ctx.lineTo(-14, -4); ctx.lineTo(-12, 1); ctx.lineTo(-2, 3);
+      ctx.closePath(); ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(2, 0); ctx.lineTo(14, -4); ctx.lineTo(12, 1); ctx.lineTo(2, 3);
+      ctx.closePath(); ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(0, -3); ctx.lineTo(11, -8); ctx.lineTo(2, -2);
+      ctx.closePath(); ctx.fill();
+    },
+    broom() {
+      const ctx = FD.ctx;
+      ctx.fillRect(-10, -1, 18, 3);
+      ctx.beginPath();
+      ctx.moveTo(-10, -2); ctx.lineTo(-18, -4); ctx.lineTo(-18, 4); ctx.lineTo(-10, 3);
+      ctx.closePath(); ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(2, -1); ctx.lineTo(11, -10); ctx.lineTo(13, -1);
+      ctx.closePath(); ctx.fill();
+      ctx.fillRect(0, -1, 14, 2);
     }
   };
 
@@ -790,7 +1037,9 @@
       quad: 1.15, stealth: 1.15, heavy: 1.0, racer: 1.2,
       osprey: 1.15, dragonfly: 1.25, disc: 1.1, spider: 1.0,
       jetwing: 1.15, balloon: 1.1, paperplane: 1.15, chopper: 1.1,
-      gyro: 1.1, blimp: 0.85, tandem: 0.9
+      gyro: 1.1, blimp: 0.85, tandem: 0.9,
+      // Wave 5
+      pizzabox: 1.0, toaster: 1.1, bumblebee: 1.2, crane: 1.15, broom: 1.0
     };
     var s = droneScale[droneType] || 1.15;
     ctx.scale(s, s);
@@ -810,6 +1059,12 @@
     else if (droneType === 'gyro') FD.drawDroneGyro(propPhase);
     else if (droneType === 'blimp') FD.drawDroneBlimp(propPhase);
     else if (droneType === 'tandem') FD.drawDroneTandem(propPhase);
+    // Wave 5
+    else if (droneType === 'pizzabox')  FD.drawDronePizzabox(propPhase);
+    else if (droneType === 'toaster')   FD.drawDroneToaster(propPhase);
+    else if (droneType === 'bumblebee') FD.drawDroneBumblebee(propPhase);
+    else if (droneType === 'crane')     FD.drawDroneCrane(propPhase);
+    else if (droneType === 'broom')     FD.drawDroneBroom(propPhase);
     else FD.drawDroneQuad(propPhase); // fallback
 
     // Silhouette overlay
