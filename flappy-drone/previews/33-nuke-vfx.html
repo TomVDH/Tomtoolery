@@ -440,6 +440,9 @@
     screenShake: 0, globalTick: 0
   };
 </script>
+<script src="../js/config.js"></script>
+<script src="../js/background.js"></script>
+<script src="../js/buildings.js"></script>
 <script src="../js/effects.js"></script>
 <script>
 /* ============================================================
@@ -695,33 +698,8 @@ bindFadeSlider('fadeFallout', 'lblFadeFallout', 'fadeInFalloutMs');
   };
 })();
 
-/* ===== City silhouette (deterministic, regenerated on resize) ===== */
-let cityFar = [], cityNear = [];
-function buildCity() {
-  cityFar.length = 0; cityNear.length = 0;
-  let s = 999331;
-  const rnd = () => { s = (s*9301+49297) % 233280; return s/233280; };
-  let x = 0;
-  while (x < FD.W) {
-    const bw = 8 + rnd()*16, bh = 14 + rnd()*40;
-    cityFar.push({ x, w: bw, h: bh });
-    x += bw + 1;
-  }
-  s = 412651;
-  x = -8;
-  while (x < FD.W) {
-    const bw = 16 + rnd()*30, bh = 22 + rnd()*65;
-    const wins = [];
-    const wn = 2 + ((rnd()*4)|0);
-    for (let i=0;i<wn;i++) wins.push({
-      x: 3 + rnd()*(bw-6),
-      y: 8 + rnd()*(bh-12),
-      on: rnd() > 0.45
-    });
-    cityNear.push({ x, w: bw, h: bh, wins });
-    x += bw + 2;
-  }
-}
+/* City comes from js/buildings.js via FD.drawFarCity — no hand-rolled silhouette. */
+function buildCity() { /* kept as a no-op shim; resize() still calls it */ }
 
 /* ===== Scenes ===== */
 const SCENES = {
@@ -734,21 +712,18 @@ let sceneKey = 'night';
 document.getElementById('sceneSel').addEventListener('change', e => sceneKey = e.target.value);
 
 /* ===== State =====
-   Time is anchored to wall-clock elapsed: state.t = (now - detonateAt)/1000 * speed.
-   Pause = freeze state.t (record the moment, restore detonateAt on resume).
-   Scrub = jump state.t AND realign FD.nukeStart so NOVA's internal
-   `performance.now() - FD.nukeStart` matches.
+   state.t advances via frame-delta in the main loop (see frame()).
+   Speed / pause / scrub all just read+write state.t and state.paused —
+   no wall-clock anchors, no detonateAt. This sidesteps tab-throttling
+   desyncs between the rAF loop and NOVA's `performance.now()` math.
 */
 const state = {
-  t: 0, playing: false, paused: false, speed: 0.6,
-  detonateAt: -1, pausedAt: 0, totalT: 14.0
+  t: 0, playing: false, paused: false, speed: 0.6, totalT: 14.0
 };
 document.querySelectorAll('[data-speed]').forEach(b => {
   b.addEventListener('click', () => {
     document.querySelectorAll('[data-speed]').forEach(x => x.classList.remove('on'));
     b.classList.add('on');
-    // Re-anchor so speed change doesn't time-travel
-    if (state.playing) state.detonateAt = performance.now() - (state.t * 1000) / +b.dataset.speed;
     state.speed = +b.dataset.speed;
   });
 });
@@ -758,13 +733,13 @@ let scrubbing = false;
 scrubInput.addEventListener('mousedown', () => { scrubbing = true; });
 scrubInput.addEventListener('mouseup',   () => { scrubbing = false; });
 scrubInput.addEventListener('input', e => {
-  const ms = +e.target.value;
-  state.t = ms / 1000;
-  // Realign both clocks so NOVA renders the right frame and continues
-  // smoothly from here on resume.
-  state.detonateAt = performance.now() - (ms / state.speed);
-  FD.nukeStart = performance.now() - ms;
-  // Drop transient particle fountains so they don't replay from past states
+  state.t = (+e.target.value) / 1000;
+  // frame() realigns FD.nukeStart from state.t each frame
+  if (!FD.nukeActive) {
+    FD.nukeActive = true;
+    FD.nukeGx = FD.W * 0.5;
+    FD.nukeGy = FD.H - FD.GROUND_H;
+  }
   if (state.t > 2.5) {
     FALLOUT.length = Math.min(FALLOUT.length, 30);
     CAP_ARCS.length = Math.min(CAP_ARCS.length, 30);
@@ -772,20 +747,9 @@ scrubInput.addEventListener('input', e => {
 });
 
 window.togglePause = function () {
-  if (!FD.nukeActive && !state.playing) return;     // nothing to pause
-  if (!state.paused) {
-    state.paused = true;
-    state.pausedAt = performance.now();
-    document.getElementById('btnPause').textContent = 'PLAY';
-  } else {
-    // Shift detonateAt + nukeStart forward by the pause duration so
-    // the resumed elapsed picks up exactly where it left off.
-    const dur = performance.now() - state.pausedAt;
-    state.detonateAt += dur;
-    FD.nukeStart    += dur;
-    state.paused = false;
-    document.getElementById('btnPause').textContent = 'PAUSE';
-  }
+  if (!FD.nukeActive && !state.playing) return;
+  state.paused = !state.paused;
+  document.getElementById('btnPause').textContent = state.paused ? 'PLAY' : 'PAUSE';
 };
 window.restart = function () {
   state.paused = false;
@@ -800,13 +764,15 @@ function detonate() {
   CAP_ARCS.length = 0;
   FD.nukeActive = true;
   FD.nukeDustTriggered = false;
-  FD.nukeStart = performance.now();
   FD.nukeGx = FD.W * 0.5 + (Math.random()-0.5) * 60;
   FD.nukeGy = FD.H - FD.GROUND_H;
   FD.screenShake = 50;
   state.t = 0;
   state.playing = true;
-  state.detonateAt = performance.now();
+  state.paused = false;
+  // frame() realigns FD.nukeStart from state.t every tick
+  FD.nukeStart = performance.now();
+  _prevFrameTs = performance.now(); // fresh dt baseline so no jump
   cv.classList.add('nuke-glow');
   cv.classList.remove('nuke-glow-fade');
   setTimeout(() => {
@@ -1207,27 +1173,14 @@ function drawSky() {
     ctx.globalAlpha = 1;
   }
 }
+/* Production city — same render path as the actual game
+   (FD.drawFarCity from buildings.js + FD.drawGround).  */
 function drawCityFar() {
-  const groundY = FD.H - FD.GROUND_H;
-  const sc = SCENES[sceneKey];
-  ctx.fillStyle = `rgba(0,0,0,${0.5 + sc.haze*0.3})`;
-  cityFar.forEach(b => ctx.fillRect(b.x, groundY-b.h, b.w, b.h));
+  if (FD.drawFarCity) FD.drawFarCity(0, 'back');
 }
 function drawCityNear() {
-  const groundY = FD.H - FD.GROUND_H;
-  const sc = SCENES[sceneKey];
-  ctx.fillStyle = '#000';
-  cityNear.forEach(b => ctx.fillRect(b.x, groundY-b.h+8, b.w, b.h));
-  if (!FD.nukeActive || (performance.now() - FD.nukeStart) < 120) {
-    ctx.fillStyle = 'rgba(255,200,120,0.65)';
-    cityNear.forEach(b => {
-      b.wins.forEach(w => {
-        if (w.on) ctx.fillRect(b.x + w.x, groundY-b.h+8 + w.y, 1.5, 1.5);
-      });
-    });
-  }
-  ctx.fillStyle = sc.ground;
-  ctx.fillRect(0, groundY+8, FD.W, FD.GROUND_H);
+  if (FD.drawFarCity) FD.drawFarCity(0, 'front');
+  if (FD.drawGround)  FD.drawGround(0);
 }
 function drawHaze() {
   const sc = SCENES[sceneKey];
@@ -1246,17 +1199,29 @@ function drawVignette() {
   ctx.fillStyle = g; ctx.fillRect(0, 0, FD.W, FD.H);
 }
 
-/* ===== Main loop ===== */
+/* ===== Main loop =====
+   CRITICAL: state.t advances by FRAME DELTA (capped) — not by wall-clock.
+   When the browser throttles rAF (backgrounded tab, preview iframe, alt-tab)
+   wall-clock keeps running but frames don't. If we used (now - detonateAt)
+   directly, NOVA's elapsed jumps past the 14s total the instant the tab
+   returns → the mushroom skips the whole animation and you see nothing
+   (reads as "crash"). Frame-delta with a max cap keeps elapsed and the
+   visible frames in lockstep regardless of throttling.
+*/
+let _prevFrameTs = performance.now();
 function frame(now) {
+  const rawDt = (now - _prevFrameTs) / 1000;
+  _prevFrameTs = now;
+  // Cap dt — if rAF paused for seconds, only advance up to 1/20s per frame
+  const dt = Math.min(rawDt, 0.05);
+
   if (state.playing && !state.paused) {
-    state.t = (now - state.detonateAt) / 1000 * state.speed;
-    if (state.speed !== 1) FD.nukeStart = now - state.t * 1000;
+    state.t += dt * state.speed;
     if (state.t >= state.totalT) { state.t = state.totalT; state.playing = false; FD.nukeActive = false; }
   }
-  // While paused, freeze NOVA's elapsed by keeping nukeStart pinned
-  if (state.paused && FD.nukeActive) {
-    FD.nukeStart = now - state.t * 1000;
-  }
+  // Keep NOVA's internal elapsed locked to state.t every frame so it
+  // can't desync even if wall-clock drifts ahead during throttling.
+  if (FD.nukeActive) FD.nukeStart = now - state.t * 1000;
   FD.globalTick++;
 
   let sx = 0, sy = 0;
