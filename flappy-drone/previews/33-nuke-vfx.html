@@ -406,8 +406,8 @@
         <label class="toggle-row"><input type="checkbox" data-fx="fallout" checked><span class="toggle-switch"></span><span class="toggle-label">Fallout drift (custom)</span></label>
         <div class="sub-label">Fallout fade-in</div>
         <div class="slider-row">
-          <label>ms: <span id="lblFadeFallout">700</span></label>
-          <input type="range" id="fadeFallout" min="0" max="3000" step="50" value="700">
+          <label>ms: <span id="lblFadeFallout">2200</span></label>
+          <input type="range" id="fadeFallout" min="0" max="5000" step="50" value="2200">
         </div>
       </div>
     </details>
@@ -519,7 +519,7 @@ window.FX_LIVE = {
   // Per-system fade-in durations (ms) — particles spawn invisible
   // and ramp to full alpha over this window. 0 = no fade-in.
   fadeInArcsMs:    400,
-  fadeInFalloutMs: 700
+  fadeInFalloutMs: 2200
 };
 
 /* ===== Wire toggle inputs ===== */
@@ -824,16 +824,19 @@ function capCenter() {
   return { cY, capR, capRx, elapsedMs };
 }
 
-/* ===== Paired particles (NOVA's de facto pattern) ===== */
+/* ===== Paired particles (NOVA's de facto pattern) =====
+   Optional p.sizeScale multiplies the streak+glow radii so callers
+   can spawn smaller/larger pairs without dropping the stem parity.
+   Default 1.0 matches the canonical stem sizes.
+*/
 function pairedSpawn(arr, p) {
-  // bornAt + fadeKey instead of fixed life-fraction, so fade-in duration
-  // is read live from FX_LIVE every frame (slider takes effect).
   const bornAt = performance.now();
+  const S = p.sizeScale || 1;
   arr.push({
     kind: 'streak',
     x: p.x, y: p.y, vx: p.vx, vy: p.vy,
     life: p.life, maxLife: p.maxLife,
-    r: 2 + Math.random() * 1.5,
+    r: (2 + Math.random() * 1.5) * S,
     hue: 25 + Math.random() * 10, sat: 100, lum: 75,
     damping: p.damping, gravity: p.gravity,
     trail: [], bornAt, fadeKey: p.fadeKey
@@ -842,7 +845,7 @@ function pairedSpawn(arr, p) {
     kind: 'glow',
     x: p.x, y: p.y, vx: p.vx, vy: p.vy,
     life: p.life, maxLife: p.maxLife,
-    r: 15 + Math.random() * 20,
+    r: (15 + Math.random() * 20) * S,
     hue: 15 + Math.random() * 10, sat: 100, lum: 65,
     damping: p.damping, gravity: p.gravity,
     bornAt, fadeKey: p.fadeKey
@@ -924,7 +927,8 @@ function spawnFallout() {
     x: px, y: py, vx, vy,
     life: 3000 + Math.random() * 1200, maxLife: 4200,
     damping: 0.9995, gravity: 0.0008,
-    fadeKey: 'fadeInFalloutMs'
+    fadeKey: 'fadeInFalloutMs',
+    sizeScale: 0.22    // much smaller than stem particles
   });
 }
 
