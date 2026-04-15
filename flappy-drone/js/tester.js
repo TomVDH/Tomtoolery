@@ -824,6 +824,26 @@
   FD.canvas = canvas;
   render();
 
+  // --- Nuke resilience: when tab becomes visible again, re-anchor
+  // nukeStart IF a nuke is still flagged active. Without this, the
+  // browser's rAF-throttling in background tabs combined with NOVA's
+  // wall-clock elapsed math causes the mushroom to never render
+  // (elapsed already past the 14s total by the time frames resume).
+  // This also clears nukeActive if the nuke was long dead so particles
+  // can drain normally.
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) return;
+    if (!FD.nukeActive) return;
+    var elapsed = performance.now() - FD.nukeStart;
+    if (elapsed > 14500) {
+      FD.nukeActive = false;    // stale — let it finish cleanup
+    } else if (elapsed > 1500) {
+      // Mid-anim and we probably missed the cap bloom — rewind to 0
+      // so the user sees the full sequence.
+      FD.nukeStart = performance.now();
+    }
+  });
+
   // --- Expose all trigger functions on window ---
   window.selectDrone = selectDrone;
   window.toggleWASD = toggleWASD;
