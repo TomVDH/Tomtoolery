@@ -347,15 +347,6 @@
       <button data-vp="mobile">MOBILE</button>
     </div>
   </div>
-  <div class="scrub-wrap">
-    <div class="scrub-track"></div>
-    <div class="scrub-fill" id="scrubFill"></div>
-    <div class="scrub-thumb" id="scrubThumb"></div>
-    <input type="range" class="scrub-input" id="scrubInput" min="0" max="12000" step="50" value="0">
-  </div>
-  <div class="phase-rail" id="phaseRail">
-    <div class="phase-cursor" id="phaseCursor"></div>
-  </div>
 </div>
 
 <!-- Controls grid -->
@@ -862,50 +853,29 @@ document.querySelectorAll('[data-scene]').forEach(b => {
   });
 });
 
-/* ===== Phase rail for the scrubber ===== */
+/* ===== Phase table (kept so HUD still reads the current nuke phase,
+   even though the visual scrubber/phase-rail has been removed) ===== */
 const PHASES = [
-  { t0: 0,    t1: 500,   name: 'FLASH',   desc: 'EMP onset' },
-  { t0: 500,  t1: 800,   name: 'EMP OFF', desc: 'Windows die' },
-  { t0: 800,  t1: 5500,  name: 'RIM',     desc: 'Rim light hot' },
-  { t0: 5500, t1: 7000,  name: 'RIM FADE',desc: 'Rim cooling' },
-  { t0: 7000, t1: 8500,  name: 'DARK',    desc: 'Silhouette' },
-  { t0: 8500, t1: 10500, name: 'RELIGHT', desc: 'Windows flicker on' },
-  { t0:10500, t1: 12000, name: 'RESTORE', desc: 'Stable' }
+  { t0: 0,    t1: 500,   name: 'FLASH' },
+  { t0: 500,  t1: 800,   name: 'EMP OFF' },
+  { t0: 800,  t1: 5500,  name: 'RIM' },
+  { t0: 5500, t1: 7000,  name: 'RIM FADE' },
+  { t0: 7000, t1: 8500,  name: 'DARK' },
+  { t0: 8500, t1: 10500, name: 'RELIGHT' },
+  { t0:10500, t1: 12000, name: 'RESTORE' }
 ];
-function buildPhaseRail() {
-  const rail = document.getElementById('phaseRail');
-  // Clear all chunks (keep cursor)
-  [...rail.querySelectorAll('.pchunk')].forEach(n => n.remove());
-  const total = 12000;
-  PHASES.forEach(p => {
-    const d = document.createElement('div');
-    d.className = 'pchunk';
-    d.style.left = (p.t0 / total * 100) + '%';
-    d.style.width = ((p.t1 - p.t0) / total * 100) + '%';
-    d.dataset.t0 = p.t0; d.dataset.t1 = p.t1;
-    d.innerHTML = '<b>' + p.name + '</b>' + p.desc;
-    rail.appendChild(d);
-  });
-}
-buildPhaseRail();
-
 function updatePhaseRail(elapsedMs) {
-  const total = 12000;
-  const pct = Math.min(100, (elapsedMs / total) * 100);
-  document.getElementById('phaseCursor').style.left = pct + '%';
-  document.getElementById('scrubFill').style.width = pct + '%';
-  document.getElementById('scrubThumb').style.left = pct + '%';
   let active = null;
   PHASES.forEach(p => {
     if (elapsedMs >= p.t0 && elapsedMs < p.t1) active = p.name;
   });
-  document.querySelectorAll('#phaseRail .pchunk').forEach(el => {
-    const t0 = +el.dataset.t0, t1 = +el.dataset.t1;
-    el.classList.toggle('active', elapsedMs >= t0 && elapsedMs < t1);
-  });
-  document.getElementById('hudPhase').textContent = FD.nukeActive ? (active || 'END') : 'IDLE';
-  document.getElementById('hudPhase').classList.toggle('armed', FD.nukeActive);
-  document.getElementById('rPhase').textContent = FD.nukeActive ? (active || 'END') : 'IDLE';
+  const hud = document.getElementById('hudPhase');
+  if (hud) {
+    hud.textContent = FD.nukeActive ? (active || 'END') : 'IDLE';
+    hud.classList.toggle('armed', FD.nukeActive);
+  }
+  const r = document.getElementById('rPhase');
+  if (r) r.textContent = FD.nukeActive ? (active || 'END') : 'IDLE';
 }
 
 /* ===== Scrubber ===== */
@@ -921,18 +891,7 @@ document.querySelectorAll('[data-speed]').forEach(b => {
     state.speed = +b.dataset.speed;
   });
 });
-const scrubInput = document.getElementById('scrubInput');
-scrubInput.addEventListener('input', e => {
-  const ms = +e.target.value;
-  state.t = ms / 1000;
-  state.detonateAt = performance.now() - (ms / state.speed);
-  FD.nukeStart = performance.now() - ms;
-  if (!FD.nukeActive) {
-    FD.nukeActive = true;
-    FD.nukeGx = FD.W / 2;
-    FD.nukeGy = FD.H - FD.GROUND_H;
-  }
-});
+// Scrubber removed — timeline-head still carries speed / scene / viewport.
 
 window.togglePause = () => {
   if (!FD.nukeActive && !state.playing) return;
@@ -1042,10 +1001,9 @@ function frame() {
   document.getElementById('rScroll').textContent = scrollX.toFixed(0);
   document.getElementById('hudScene').textContent = scrollX.toFixed(0) + ' · ' + sceneKey.toUpperCase();
 
-  // Update state.t if playing
+  // Update state.t if playing (scrubber removed — drives nuke time only)
   if (state.playing && !state.paused && FD.nukeActive) {
     state.t = (now - state.detonateAt) * state.speed / 1000;
-    scrubInput.value = Math.min(12000, state.t * 1000);
     if (state.t * 1000 > 12000) {
       state.playing = false;
       FD.nukeActive = false;
