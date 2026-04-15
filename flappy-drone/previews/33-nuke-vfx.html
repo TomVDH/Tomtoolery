@@ -605,23 +605,39 @@ bindFadeSlider('fadeFallout', 'lblFadeFallout', 'fadeInFalloutMs');
   );
   src = src.replace(
     /const pvx = dir \* \(0\.15 \+ Math\.random\(\) \* 0\.35\);/,
-    // Slower stem ejecta: base speed halved. wideStem (when on) adds
-    // lateral reach without restoring the original fast pace.
-    'const pvx = dir * (0.08 + Math.random() * 0.20) * (window.FX_LIVE.wideStem ? 1.8 : 1);'
+    // Stem ejecta pvx: 25% go straight-up (small noise around 0) so
+    // the middle of the stem isn't a dead zone between left+right
+    // fountains. Remaining 75% use the reduced base speed with
+    // optional wideStem lateral reach.
+    'const pvx = (Math.random() < 0.25 ? (Math.random() - 0.5) * 0.06 : dir * (0.08 + Math.random() * 0.20)) * (window.FX_LIVE.wideStem ? 1.8 : 1);'
   );
-  // Also slow the upward kick so arcs stay lofty rather than shooting
+  // Upward kick bumped back up so particles fly higher and farther,
+  // and damping raised toward 1 for less drag on the journey.
   src = src.replace(
     /const pvy = -0\.5 - Math\.random\(\) \* 0\.5;/,
-    'const pvy = -0.25 - Math.random() * 0.25;'
+    'const pvy = -0.55 - Math.random() * 0.55;'
+  );
+  src = src.replace(
+    /damping: 0\.9992, gravity: 0\.0018, streak: true, hasTrail: true,/g,
+    'damping: 0.9996, gravity: 0.0012, streak: true, hasTrail: true,'
+  );
+  src = src.replace(
+    /damping: 0\.9992, gravity: 0\.0018, glow: true,/g,
+    'damping: 0.9996, gravity: 0.0012, glow: true,'
+  );
+  // Wider spawn column for the mid-stem so particles emerge across
+  // the stem's full width instead of a tight ±7.5px vertical slit.
+  src = src.replace(
+    /const px = gx \+ \(Math\.random\(\) - 0\.5\) \* 15;/,
+    'const px = gx + (Math.random() - 0.5) * 28;'
   );
 
   // 9. Cap-edge debris — gate by capEdge AND bring particle size +
   // saturation + luminance up to match the stem-arc (mid-stem)
-  // particles so cap-ejecta reads identical in scale & glow to
-  // what the stem is throwing sideways.
+  // particles. Also kicks off earlier (1200ms → 800ms) per user.
   src = src.replace(
     /if \(elapsed > 1200 && elapsed < 4000 && Math\.random\(\) < 0\.2 && FD\.particles\.length < 300\) \{/,
-    'if (elapsed > 1200 && elapsed < 4000 && Math.random() < 0.2 && FD.particles.length < 300 && window.FX_LIVE.capEdge) {'
+    'if (elapsed > 800 && elapsed < 4000 && Math.random() < 0.22 && FD.particles.length < 300 && window.FX_LIVE.capEdge) {'
   );
   src = src.replace(
     /const pvx = dir \* \(0\.25 \+ Math\.random\(\) \* 0\.4\);/,
@@ -743,9 +759,32 @@ bindFadeSlider('fadeFallout', 'lblFadeFallout', 'fadeInFalloutMs');
   FD.updateParticles = function () {
     const toFlash = [];
     for (const p of FD.particles) {
-      if (p.streak && p.hasTrail && !p.fg && p.life <= 1 && !p._flashed) {
+      // Tag newly-spawned mid-stem streaks once
+      if (p.streak && p.hasTrail && !p.fg && !p._tagged) {
+        p._tagged = true;
+        // ~12% of stem streaks fly "at the camera": slower lateral
+        // motion, slight forward bias, and radius grows each frame
+        // to simulate approaching the lens. Switched to foreground
+        // so they render on top of the city.
+        if (Math.random() < 0.12) {
+          p._zoom = true;
+          p._baseR = p.r;
+          p.vx *= 0.35;
+          p.vy *= 0.6;
+          p.fg  = true;
+        }
+      }
+      // End-of-life bright flash
+      if (p.streak && p.hasTrail && p.life <= 1 && !p._flashed) {
         p._flashed = true;
         if (Math.random() < 0.30) toFlash.push({ x: p.x, y: p.y, fg: p.fg });
+      }
+    }
+    // Grow camera-bound particles (linear with age, up to ~4×)
+    for (const p of FD.particles) {
+      if (p._zoom && p._baseR) {
+        const age = 1 - (p.life / p.maxLife);
+        p.r = p._baseR * (1 + age * 3.0);
       }
     }
     origUpdate.apply(this, arguments);
