@@ -403,7 +403,7 @@
         <label class="toggle-row"><input type="checkbox" data-fx="groundFires" checked><span class="toggle-switch"></span><span class="toggle-label">Ground fires (4s+)</span></label>
         <label class="toggle-row"><input type="checkbox" data-fx="baseGlow" checked><span class="toggle-switch"></span><span class="toggle-label">Base radial glow</span></label>
         <label class="toggle-row"><input type="checkbox" data-fx="baseRing" checked><span class="toggle-switch"></span><span class="toggle-label">Base ring / skirt</span></label>
-        <label class="toggle-row"><input type="checkbox" data-fx="fallout" checked><span class="toggle-switch"></span><span class="toggle-label">Fallout drift (custom)</span></label>
+        <label class="toggle-row"><input type="checkbox" data-fx="fallout"><span class="toggle-switch"></span><span class="toggle-label">Fallout drift (custom)</span></label>
         <div class="sub-label">Fallout fade-in</div>
         <div class="slider-row">
           <label>ms: <span id="lblFadeFallout">2200</span></label>
@@ -513,7 +513,7 @@ window.FX_LIVE = {
   // Ground
   baseFire: true, groundFires: true, baseGlow: true, baseRing: true,
   // Custom layers (drawn outside NOVA)
-  capArcs: false, afterglow: true, fallout: true,
+  capArcs: false, afterglow: true, fallout: false,
   // Shockwave style: 'nova' | 'harmonic' | 'pulse' | 'refraction' | 'combo' | 'off'
   shockStyle: 'nova',
   // Per-system fade-in durations (ms) — particles spawn invisible
@@ -598,10 +598,11 @@ bindFadeSlider('fadeFallout', 'lblFadeFallout', 'fadeInFalloutMs');
   );
 
   // 8. Mid-stem outward debris (the orange streak+glow pairs)
-  // Also widen stem if FX_LIVE.wideStem is true (live-read multiplier)
+  // Also widen stem if FX_LIVE.wideStem is true (live-read multiplier).
+  // Loop count bumped 2 → 4 for thicker stem curtain.
   src = src.replace(
     /if \(elapsed > 200 && elapsed < 2000\) \{\n\s*for \(let i = 0; i < 2; i\+\+\) \{/,
-    'if (elapsed > 200 && elapsed < 2000 && window.FX_LIVE.midStem) {\n      for (let i = 0; i < 2; i++) {'
+    'if (elapsed > 200 && elapsed < 2000 && window.FX_LIVE.midStem) {\n      for (let i = 0; i < 4; i++) {'
   );
   src = src.replace(
     /const pvx = dir \* \(0\.15 \+ Math\.random\(\) \* 0\.35\);/,
@@ -611,19 +612,20 @@ bindFadeSlider('fadeFallout', 'lblFadeFallout', 'fadeInFalloutMs');
     // optional wideStem lateral reach.
     'const pvx = (Math.random() < 0.25 ? (Math.random() - 0.5) * 0.06 : dir * (0.08 + Math.random() * 0.20)) * (window.FX_LIVE.wideStem ? 1.8 : 1);'
   );
-  // Upward kick bumped back up so particles fly higher and farther,
-  // and damping raised toward 1 for less drag on the journey.
+  // Upward kick bumped further so particles reach higher apex,
+  // damping pushed near 1 and gravity halved so they travel much
+  // farther before dropping.
   src = src.replace(
     /const pvy = -0\.5 - Math\.random\(\) \* 0\.5;/,
-    'const pvy = -0.55 - Math.random() * 0.55;'
+    'const pvy = -0.85 - Math.random() * 0.75;'
   );
   src = src.replace(
     /damping: 0\.9992, gravity: 0\.0018, streak: true, hasTrail: true,/g,
-    'damping: 0.9996, gravity: 0.0012, streak: true, hasTrail: true,'
+    'damping: 0.9998, gravity: 0.0007, streak: true, hasTrail: true,'
   );
   src = src.replace(
     /damping: 0\.9992, gravity: 0\.0018, glow: true,/g,
-    'damping: 0.9996, gravity: 0.0012, glow: true,'
+    'damping: 0.9998, gravity: 0.0007, glow: true,'
   );
   // Wider spawn column for the mid-stem so particles emerge across
   // the stem's full width instead of a tight ±7.5px vertical slit.
@@ -632,12 +634,20 @@ bindFadeSlider('fadeFallout', 'lblFadeFallout', 'fadeInFalloutMs');
     'const px = gx + (Math.random() - 0.5) * 28;'
   );
 
-  // 9. Cap-edge debris — gate by capEdge AND bring particle size +
-  // saturation + luminance up to match the stem-arc (mid-stem)
-  // particles. Also kicks off earlier (1200ms → 800ms) per user.
+  // 9. Cap-edge debris — kicks off ~1.2s earlier (1200 → 100 ms),
+  // tail extends 0.5s longer (4000 → 4500 ms), spawn rate roughly
+  // doubled for more density. Also gated by capEdge toggle.
+  // Inner loop bumped ci < 2 → ci < 3 for extra per-tick emit.
   src = src.replace(
-    /if \(elapsed > 1200 && elapsed < 4000 && Math\.random\(\) < 0\.2 && FD\.particles\.length < 300\) \{/,
-    'if (elapsed > 800 && elapsed < 4000 && Math.random() < 0.22 && FD.particles.length < 300 && window.FX_LIVE.capEdge) {'
+    /if \(elapsed > 1200 && elapsed < 4000 && Math\.random\(\) < 0\.2 && FD\.particles\.length < 300\) \{\n\s*for \(let ci = 0; ci < 2; ci\+\+\) \{/,
+    'if (elapsed > 100 && elapsed < 4500 && Math.random() < 0.42 && FD.particles.length < 300 && window.FX_LIVE.capEdge) {\n      for (let ci = 0; ci < 3; ci++) {'
+  );
+  // Tag cap-edge particles (maxLife: 1100 is unique to them) with
+  // _fadeInMs + _bornAt so drawParticles wrapper can ramp their
+  // alpha from transparent → opaque over 1.5s per user spec.
+  src = src.replace(
+    /maxLife: 1100, /g,
+    'maxLife: 1100, _fadeInMs: 1500, _bornAt: performance.now(), '
   );
   src = src.replace(
     /const pvx = dir \* \(0\.25 \+ Math\.random\(\) \* 0\.4\);/,
@@ -743,6 +753,31 @@ bindFadeSlider('fadeFallout', 'lblFadeFallout', 'fadeInFalloutMs');
   FD.drawNukeOverlay = function () {
     if (!FX_LIVE.whiteFlash) return;
     PATCHED.call(this);
+  };
+})();
+
+/* ===== Fade-in wrapper for tagged FD particles =====
+   drawParticles computes alpha from p.life/p.maxLife. For particles
+   carrying _fadeInMs + _bornAt, we temporarily scale p.life down
+   during the fade-in window so the computed alpha emerges as
+   transparent → opaque over the chosen duration, then restore.
+*/
+(function patchDrawParticlesFadeIn() {
+  const origDraw = FD.drawParticles;
+  FD.drawParticles = function (isFg) {
+    const now = performance.now();
+    const restore = [];
+    for (const p of FD.particles) {
+      if (p._fadeInMs && p._bornAt) {
+        const age = now - p._bornAt;
+        if (age < p._fadeInMs) {
+          restore.push({ p, life: p.life });
+          p.life = p.life * (age / p._fadeInMs);
+        }
+      }
+    }
+    origDraw.call(this, isFg);
+    for (const r of restore) r.p.life = r.life;
   };
 })();
 
