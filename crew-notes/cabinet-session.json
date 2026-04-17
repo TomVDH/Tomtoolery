@@ -1,38 +1,56 @@
 {
-  "version": "1.9.0",
-  "plugin_version": "1.9.0",
-  "session_id": "2026-03-26T23:17:00Z",
+  "version": "2.1.0",
+  "plugin_version": "2.1.0",
+  "session_id": "2026-04-16T20:16:00Z",
   "project_name": "Flappy Drone",
-  "codename": null,
-  "status": "wrapped",
-  "crew_notes_path": "/Users/tomlinson/Documents/Tomtoolery/crew-notes",
+  "codename": "Unify",
+  "status": "active",
+  "crew_notes_path": "/Users/tomlinson/Library/Mobile Documents/com~apple~CloudDocs/Projects/VIBE CODING/tomtoolery/.claude/worktrees/romantic-lamport/crew-notes",
 
-  "active_specialist": null,
-  "active_task": null,
-  "collaboration": null,
+  "active_specialist": "Kevijntje",
+  "active_task": "PR 1 landed \u2014 awaiting visual smoke test, then PR 2 widescreen planning",
+  "collaboration": ["Henske lead", "Thieuke review", "Jonasty QA", "Bostrol docs"],
 
   "gates": {
-    "completed": [],
-    "current": null,
-    "total_planned": null
+    "completed": [
+      "brainstorming-complete",
+      "design-spec-committed",
+      "pr1-nuke-plan-committed",
+      "pr1-nuke-14-tasks-implemented",
+      "pr1-nuke-final-review-merge-ready"
+    ],
+    "current": "pr1-visual-smoke-test-pending",
+    "total_planned": 9
   },
 
   "scope": {
-    "locked": false,
-    "in": [],
-    "out": [],
+    "locked": true,
+    "in": [
+      "PR 1 — Nova Nuke unification (effects.js + lab retirement)",
+      "PR 2 — Widescreen support (620 <-> 1138)",
+      "PR 3 — Menu refresh (on-brand tokens, locked layout)"
+    ],
+    "out": [
+      "Sound design",
+      "Rush lore redesign",
+      "Leaderboards / daily challenges / ghost drone",
+      "Pixel bitmap title swap (rejected — Impact kept)",
+      "In-menu viewport toggle (deferred)"
+    ],
     "drift_count": 0
   },
 
-  "parking_lot": ["Preview 22 — revisit Cabinet Cut approach with more time"],
+  "parking_lot": [
+    "Preview 22 — revisit Cabinet Cut approach with more time (carried from prior session)"
+  ],
 
   "energy": {
-    "last_check": null,
-    "temperature": "good",
-    "momentum": "cruising",
-    "session_start": "2026-03-26T23:17:00Z",
+    "last_check": "2026-04-16T20:16:00Z",
+    "temperature": "focused",
+    "momentum": "pushing",
+    "session_start": "2026-04-16T20:16:00Z",
     "break_count": 0,
-    "last_break": "2026-03-26T23:17:00Z"
+    "last_break": "2026-04-16T20:16:00Z"
   },
 
   "dissent": [],
@@ -45,13 +63,13 @@
 
   "chatter": {
     "nudge_used": false,
-    "message_count_approx": 48,
+    "message_count_approx": 7,
     "level": "quiet"
   },
 
   "git": {
-    "branch": "master",
-    "last_commit": "3febd5a",
+    "branch": "claude/romantic-lamport",
+    "last_commit": "a9b7af2",
     "version_tag": null
   },
 
@@ -61,13 +79,13 @@
     "base_path": "/Users/tomlinson/Library/Mobile Documents/iCloud~md~obsidian/Documents/Claude Cabinet",
     "vault_name": "Claude Cabinet",
     "version": "2.0",
-    "connected_at": "2026-03-26T23:17:00Z",
+    "connected_at": "2026-04-16T20:16:00Z",
     "brief_loaded": false,
-    "preferences_loaded": true,
+    "preferences_loaded": false,
     "lessons_loaded": false,
     "decisions_written": [],
     "preferences_captured": [],
     "lessons_logged": [],
-    "last_write_at": "2026-03-27T00:15:00Z"
+    "last_write_at": null
   }
 }
