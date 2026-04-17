@@ -748,10 +748,13 @@
     });
   };
 
-  // --- Nuke mushroom cloud: NOVA MK-V (11s timeline) ---
-  // Turbulent noisy cap, hourglass stem, blue-white core, differential darkening,
-  // outward-arcing debris with trails, building dust kick-up, ground fires,
-  // atmospheric haze, additive blending. Drawn behind city layer.
+  // --- Nuke mushroom cloud: NOVA MK-V (14 s timeline, unified) ---
+  // All effect blocks gated by FD.NUKE_FX.<key>. Lab patches baked in:
+  // brighter cap-edge (earlier start + doubled rate), fattened stem/cap
+  // particles, widened stem spawn column, stem ejecta dead-zone fix,
+  // bezier-ribbon stem core rod, taller haze band, _fadeInMs tagging
+  // on cap-edge. See docs/specs/2026-04-16-unify-design.md § 3 for the
+  // full change log.
   FD.drawNukeCloud = function () {
     if (!FD.nukeActive) return;
     const ctx = FD.ctx;
@@ -779,7 +782,6 @@
     const hShift = darkT * 20;
     const lDrop  = darkT * 35;
 
-    // Noisy ellipse helper — turbulent organic cap boundary
     const drawNoisyEllipse = (cx, cy, rx, ry, iOff, flattenBottom) => {
       ctx.beginPath();
       for (let j = 0; j <= 60; j++) {
@@ -794,14 +796,14 @@
       ctx.fill();
     };
 
-    // Thermal god rays (0-2.5s)
-    if (elapsed < 2500) {
-      const rayAlpha = (1 - (elapsed / 2500) ** 2) * 0.05;
+    // Thermal god rays (0-2.5s) — gated + dimmed + count halved
+    if (elapsed < 2500 && FD.NUKE_FX.godRays) {
+      const rayAlpha = (1 - (elapsed / 2500) ** 2) * 0.012;
       ctx.save();
       ctx.globalAlpha = rayAlpha;
       ctx.globalCompositeOperation = 'screen';
-      for (let i = 0; i < 8; i++) {
-        const angle = (i / 8) * Math.PI + Math.PI;
+      for (let i = 0; i < 4; i++) {
+        const angle = (i / 4) * Math.PI + Math.PI;
         const sweep = Math.sin(t * 0.4 + i * 1.7) * 0.08;
         const fa = angle + sweep;
         const len = W * 0.8 + Math.sin(t * 1.2 + i * 3) * 40;
@@ -818,8 +820,8 @@
       ctx.restore();
     }
 
-    // Shockwave + ground dust band
-    if (elapsed > 200 && elapsed < 2800) {
+    // NOVA shockwave + ground dust band — gated (disabled when combo/pulse/etc is active)
+    if (elapsed > 200 && elapsed < 2800 && FD.NUKE_FX.novaShock) {
       const st = (elapsed - 200) / 2600;
       const radius = st * Math.max(W, H) * 0.9;
       ctx.globalAlpha = alpha * Math.max(0, 1 - st) * 0.4;
@@ -855,32 +857,63 @@
     ctx.bezierCurveTo(gx + stemTopW * 0.3 + wobble - neckPinch * 0.5, midY - 20, gx + stemTopW * 0.6 + wobble, cY + (midY - cY) * 0.5, gx + stemTopW / 2, cY + capR * 0.3);
     ctx.closePath(); ctx.fill();
 
-    // Stem core glow line
+    // Stem core glow — bezier ribbon that tracks the stem wobble
     const coreGlowA = alpha * Math.max(0, 0.5 - darkT * 0.4);
-    if (coreGlowA > 0.01) {
+    if (coreGlowA > 0.01 && FD.NUKE_FX.stemCore) {
       const cg = ctx.createLinearGradient(gx, cY + capR * 0.3, gx, gy);
       cg.addColorStop(0, `hsla(40,100%,${Math.max(20, 65 - lDrop)}%,${coreGlowA})`);
       cg.addColorStop(1, `hsla(25,100%,${Math.max(10, 40 - lDrop)}%,${coreGlowA * 0.2})`);
       ctx.fillStyle = cg;
-      ctx.fillRect(gx - stemTopW * 0.075, cY + capR * 0.3, stemTopW * 0.15, gy - cY - capR * 0.3);
+      // Bezier ribbon — mirrors stem wobble instead of staying pin-straight
+      (() => {
+        const halfW = stemTopW * 0.075;
+        const topY  = cY + capR * 0.3;
+        ctx.beginPath();
+        ctx.moveTo(gx - halfW, topY);
+        ctx.bezierCurveTo(
+          gx - halfW + wobble * 0.65, topY + (midY - topY) * 0.5,
+          gx - halfW + wobble * 0.55 - neckPinch * 0.3, midY - 18,
+          gx - halfW + wobble * 0.45, midY
+        );
+        ctx.bezierCurveTo(
+          gx - halfW + wobble * 0.40 + neckPinch * 0.2, midY + 18,
+          gx - halfW * 0.9, gy - 24,
+          gx - halfW * 0.85, gy
+        );
+        ctx.lineTo(gx + halfW * 0.85, gy);
+        ctx.bezierCurveTo(
+          gx + halfW * 0.9, gy - 24,
+          gx + halfW + wobble * 0.40 + neckPinch * 0.2, midY + 18,
+          gx + halfW + wobble * 0.45, midY
+        );
+        ctx.bezierCurveTo(
+          gx + halfW + wobble * 0.55 - neckPinch * 0.3, midY - 18,
+          gx + halfW + wobble * 0.65, topY + (midY - topY) * 0.5,
+          gx + halfW, topY
+        );
+        ctx.closePath();
+        ctx.fill();
+      })();
     }
 
-    // Base glow
-    const bgR = capRx * 2.2;
-    const bgA = alpha * Math.max(0, 1 - (elapsed / 2000));
-    const bg = ctx.createRadialGradient(gx, gy, 0, gx, gy, bgR);
-    bg.addColorStop(0, `hsla(40,100%,80%,${bgA})`);
-    bg.addColorStop(0.15, `hsla(30,100%,60%,${bgA * 0.5})`);
-    bg.addColorStop(0.4, `hsla(20,100%,40%,${bgA * 0.1})`);
-    bg.addColorStop(1, 'hsla(15,100%,20%,0)');
-    ctx.fillStyle = bg;
-    ctx.beginPath(); ctx.arc(gx, gy, bgR, 0, Math.PI * 2); ctx.fill();
+    // Base radial glow — gated
+    if (FD.NUKE_FX.baseGlow) {
+      const bgR = capRx * 2.2;
+      const bgA = alpha * Math.max(0, 1 - (elapsed / 2000));
+      const bg = ctx.createRadialGradient(gx, gy, 0, gx, gy, bgR);
+      bg.addColorStop(0, `hsla(40,100%,80%,${bgA})`);
+      bg.addColorStop(0.15, `hsla(30,100%,60%,${bgA * 0.5})`);
+      bg.addColorStop(0.4, `hsla(20,100%,40%,${bgA * 0.1})`);
+      bg.addColorStop(1, 'hsla(15,100%,20%,0)');
+      ctx.fillStyle = bg;
+      ctx.beginPath(); ctx.arc(gx, gy, bgR, 0, Math.PI * 2); ctx.fill();
+    }
 
     // Sub-cloud at stem-cap intersection
     ctx.fillStyle = `hsla(${18 - hShift},85%,${Math.max(8, 35 - lDrop)}%,${alpha})`;
     drawNoisyEllipse(gx, cY + capR * 0.25, capRx * 0.75, capR * 0.4, 10, false);
 
-    // Differential darkening — outer layers darken faster
+    // Differential darkening
     const outerDark = Math.min(1, darkT * 1.4);
     const midDark   = darkT;
     const innerDark = Math.min(1, darkT * 0.6);
@@ -888,7 +921,7 @@
     const outerHShift = outerDark * 22;
     const outerLDrop  = outerDark * 40;
 
-    // 4 plasma cap layers with noisy edges
+    // 4 plasma cap layers
     ctx.fillStyle = `hsla(${8 - outerHShift},${90 - outerDark * 30}%,${Math.max(4, 22 - outerLDrop)}%,${alpha})`;
     drawNoisyEllipse(gx, cY, capRx * 1.0, capR * 0.95, 0, true);
     ctx.fillStyle = `hsla(${14 - midDark * 20},${92 - midDark * 20}%,${Math.max(6, 30 - midDark * 32)}%,${alpha})`;
@@ -898,14 +931,14 @@
     ctx.fillStyle = `hsla(${40 - coreDark * 15},100%,${Math.max(15, 58 - coreDark * 25)}%,${alpha})`;
     drawNoisyEllipse(gx, cY - capR * 0.08, capRx * 0.45, capR * 0.45, 3, false);
 
-    // Hot core — warm amber, no blue/green
+    // Hot core
     const coreExtDk = elapsed > 6500 ? Math.min(1, (elapsed - 6500) / 2000) : 0;
     const coreA = alpha * Math.max(0.1, 1 - coreExtDk);
     ctx.fillStyle = `hsla(35,100%,${Math.max(15, 80 - coreExtDk * 60)}%,${coreA})`;
     drawNoisyEllipse(gx, cY - capR * 0.1, capRx * 0.25, capR * 0.25, 20, false);
 
-    // Rolling hotspots on cap face
-    for (let hs = 0; hs < 4; hs++) {
+    // Rolling hotspots — gated
+    if (FD.NUKE_FX.hotspots) for (let hs = 0; hs < 4; hs++) {
       if (t < 0.5 + hs * 0.3 || darkT > 0.8) continue;
       const hsX = gx + Math.sin(t * 0.3 + hs * 2.5) * capRx * 0.4;
       const hsY = cY - capR * 0.05 + Math.cos(t * 0.25 + hs * 1.8) * capR * 0.25;
@@ -919,12 +952,14 @@
       ctx.beginPath(); ctx.arc(hsX, hsY, hsR, 0, Math.PI * 2); ctx.fill();
     }
 
-    // Base ring / skirt
-    ctx.fillStyle = `hsla(${15 - hShift},70%,${Math.max(5, 28 - lDrop)}%,${alpha * 0.8})`;
-    drawNoisyEllipse(gx, cY + capR * 0.4, capRx * 1.15, capR * 0.22, 12, false);
+    // Base ring / skirt — gated
+    if (FD.NUKE_FX.baseRing) {
+      ctx.fillStyle = `hsla(${15 - hShift},70%,${Math.max(5, 28 - lDrop)}%,${alpha * 0.8})`;
+      drawNoisyEllipse(gx, cY + capR * 0.4, capRx * 1.15, capR * 0.22, 12, false);
+    }
 
-    // 3 cloud bands
-    for (let i = 0; i < 3; i++) {
+    // 3 cloud bands — gated
+    if (FD.NUKE_FX.cloudBands) for (let i = 0; i < 3; i++) {
       const entryT = 0.15 + i * 0.15;
       if (cloudT < entryT) continue;
       const bandAge = Math.min(1, (cloudT - entryT) / 0.35);
@@ -951,15 +986,21 @@
     // === DEBRIS PARTICLES ===
     const highStemY = cY + (gy - cY) * 0.30;
 
-    // Outward-arcing debris from mid-stem (paired streak + glow with trails)
-    if (elapsed > 200 && elapsed < 2000) {
-      for (let i = 0; i < 2; i++) {
+    // Mid-stem outward debris — gated, 4 pairs, dead-zone fix, widened column,
+    // bigger pvy kick, damping/gravity tuned for higher apex + longer travel
+    if (elapsed > 200 && elapsed < 2000 && FD.NUKE_FX.midStem) {
+      for (let i = 0; i < 4; i++) {
         if (FD.particles.length >= 300) break;
         const dir = Math.random() < 0.5 ? -1 : 1;
-        const px = gx + (Math.random() - 0.5) * 15;
+        const px = gx + (Math.random() - 0.5) * 28;  // widened from 15
         const py = highStemY + (Math.random() - 0.5) * 30;
-        const pvx = dir * (0.15 + Math.random() * 0.35);
-        const pvy = -0.5 - Math.random() * 0.5;
+        // 25% go near-straight-up so the middle of the stem isn't a
+        // dead zone between left+right fountains.
+        const pvx = (Math.random() < 0.25
+          ? (Math.random() - 0.5) * 0.06
+          : dir * (0.08 + Math.random() * 0.20)
+        ) * (FD.NUKE_FX.wideStem ? 1.8 : 1);
+        const pvy = -0.85 - Math.random() * 0.75;  // bumped from -0.5-1.0 to -0.85-1.6
         const shortLived = Math.random() < 0.4;
         const plife = shortLived ? (300 + Math.random() * 400) : (800 + Math.random() * 800);
         const pmaxLife = shortLived ? 700 : 1600;
@@ -968,36 +1009,50 @@
           x: px, y: py, vx: pvx, vy: pvy,
           life: plife, maxLife: pmaxLife, r: 2 + Math.random() * 1.5,
           hue: 25 + Math.random() * 10, sat: 100, lum: 75,
-          damping: 0.9992, gravity: 0.0018, streak: true, hasTrail: true,
+          damping: 0.9998, gravity: 0.0007, streak: true, hasTrail: true,
           fg: false, switchZ: isFg
         });
         FD.particles.push({
           x: px, y: py, vx: pvx, vy: pvy,
           life: plife, maxLife: pmaxLife, r: 15 + Math.random() * 20,
           hue: 15 + Math.random() * 10, sat: 100, lum: 65,
-          damping: 0.9992, gravity: 0.0018, glow: true,
+          damping: 0.9998, gravity: 0.0007, glow: true,
           fg: false, switchZ: isFg
         });
       }
     }
 
-    // Cap-edge debris
-    if (elapsed > 1200 && elapsed < 4000 && Math.random() < 0.2 && FD.particles.length < 300) {
-      for (let ci = 0; ci < 2; ci++) {
+    // Cap-edge debris — earlier start (1200→100 ms), tail extended
+    // (4000→4500 ms), rate doubled (0.2→0.42), inner loop 2→3, particles
+    // fattened to match stem, tagged with _fadeInMs for gentle appearance.
+    if (elapsed > 100 && elapsed < 4500 && Math.random() < 0.42 && FD.particles.length < 300 && FD.NUKE_FX.capEdge) {
+      for (let ci = 0; ci < 3; ci++) {
         const dir = Math.random() < 0.5 ? -1 : 1;
         const px = gx + dir * capRx * (0.5 + Math.random() * 0.4);
         const py = cY - capR * 0.1 + (Math.random() - 0.5) * capR * 0.3;
-        const pvx = dir * (0.25 + Math.random() * 0.4);
+        const pvx = dir * (0.25 + Math.random() * 0.4) * (FD.NUKE_FX.wideStem ? 2.0 : 1);
         const pvy = -0.05 - Math.random() * 0.15;
         const plife = 600 + Math.random() * 500;
-        const isFg = Math.random() < 0.45;
-        FD.particles.push({ x: px, y: py, vx: pvx, vy: pvy, life: plife, maxLife: 1100, r: 1 + Math.random() * 1.5, hue: 25 + Math.random() * 10, sat: 80, lum: 60, damping: 0.9993, gravity: 0.0014, streak: true, hasTrail: true, fg: true });
-        FD.particles.push({ x: px, y: py, vx: pvx, vy: pvy, life: plife, maxLife: 1100, r: 8 + Math.random() * 10, hue: 18 + Math.random() * 10, sat: 85, lum: 50, damping: 0.9993, gravity: 0.0014, glow: true, fg: true });
+        const bornAt = performance.now();
+        FD.particles.push({
+          x: px, y: py, vx: pvx, vy: pvy, life: plife,
+          maxLife: 1100, _fadeInMs: 1500, _bornAt: bornAt,
+          r: 2 + Math.random() * 1.5,
+          hue: 25 + Math.random() * 10, sat: 100, lum: 75,
+          damping: 0.9993, gravity: 0.0014, streak: true, hasTrail: true, fg: true
+        });
+        FD.particles.push({
+          x: px, y: py, vx: pvx, vy: pvy, life: plife,
+          maxLife: 1100, _fadeInMs: 1500, _bornAt: bornAt,
+          r: 15 + Math.random() * 20,
+          hue: 15 + Math.random() * 10, sat: 100, lum: 65,
+          damping: 0.9993, gravity: 0.0014, glow: true, fg: true
+        });
       }
     }
 
-    // Base fire
-    if (elapsed > 800 && elapsed < 4000 && Math.random() < 0.3 && FD.particles.length < 300) {
+    // Base fire — gated
+    if (elapsed > 800 && elapsed < 4000 && Math.random() < 0.3 && FD.particles.length < 300 && FD.NUKE_FX.baseFire) {
       const bdir = Math.random() < 0.5 ? -1 : 1;
       FD.particles.push({
         x: gx + (Math.random() - 0.5) * stemBaseW * 1.5, y: gy - Math.random() * 10,
@@ -1007,10 +1062,8 @@
       });
     }
 
-
-
-    // Ground fires (after 4s)
-    if (elapsed > 4000 && elapsed < 12000 && Math.random() < 0.08 && FD.particles.length < 500) {
+    // Ground fires — gated
+    if (elapsed > 4000 && elapsed < 12000 && Math.random() < 0.08 && FD.particles.length < 500 && FD.NUKE_FX.groundFires) {
       FD.particles.push({
         x: gx + (Math.random() - 0.5) * W * 0.7, y: gy - 2 - Math.random() * 4,
         vx: (Math.random() - 0.5) * 0.05, vy: -0.02 - Math.random() * 0.04,
@@ -1020,10 +1073,10 @@
       });
     }
 
-    // Atmospheric haze band at horizon
-    if (elapsed > 400 && elapsed < 12500) {
+    // Atmospheric ground haze — gated, height 60+90 (bumped from 40+50)
+    if (elapsed > 400 && elapsed < 12500 && FD.NUKE_FX.haze) {
       const hazeT = elapsed < 1500 ? (elapsed - 400) / 1100 : elapsed < 9000 ? 1 : 1 - (elapsed - 9000) / 3500;
-      const hazeH = 40 + hazeT * 50;
+      const hazeH = 60 + hazeT * 90;
       const hazeA = hazeT * 0.55;
       ctx.save();
       const hg = ctx.createLinearGradient(0, gy - hazeH, 0, gy + 10);
