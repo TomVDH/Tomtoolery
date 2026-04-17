@@ -414,6 +414,7 @@
     if (state === 'dying') {
       deathTimer++;
       if (FD.screenShake > 0.3) FD.screenShake *= 0.82;
+      FD.tickNuke();
       FD.updateParticles();
       // Mark skippable once the text has fully faded in
       if (deathTimer > FD.DEATH_FLASH_DUR + FD.DIED_FADE_IN) {
@@ -434,12 +435,14 @@
     // --- dead ---
     if (state === 'dead') {
       deathTimer++;
+      FD.tickNuke();
       FD.updateParticles();
       return;
     }
 
     // --- nuking (idle drone, particles only) ---
     if (state === 'nuking') {
+      FD.tickNuke();
       FD.updateParticles();
       return;
     }
@@ -450,6 +453,7 @@
       drone.y  += drone.vy;
       drone.angle += 0.05;     // tumble
       drone.propPhase += 0.1;  // slow props
+      FD.tickNuke();
       FD.updateParticles();
       if (drone.y > H - FD.GROUND_H - 8) {
         drone.y = H - FD.GROUND_H - 8;
@@ -740,6 +744,7 @@
     groundScroll  += curSpeed;
     farCityScroll += curSpeed * 0.05;
 
+    FD.tickNuke();
     FD.updateParticles();
     FD.updateFireworks();
   }
@@ -771,6 +776,7 @@
     // Mountain silhouettes behind city
     FD.drawMountains(scrollX);
     FD.drawFarCity(scrollX, 'back');
+    FD.drawBehindNukeCloud();
     FD.drawNukeCloud();
 
     // Ground — tracks actual game speed
@@ -886,6 +892,7 @@
     FD.drawVignette();
     FD.drawReadySequence(readyT, state);
     FD.drawDeathSequence(state, deathTimer);
+    FD.drawInFrontNukeCloud();
     FD.drawNukeOverlay();
 
     ctx.restore();
